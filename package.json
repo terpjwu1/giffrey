@@ -1,0 +1,43 @@
+{
+  "name": "giffrey",
+  "version": "1.0.0",
+  "description": "Screen recording to GIF/WebM — desktop app",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:js": "esbuild src/main.ts --bundle --minify --sourcemap --target=chrome120 --outfile=dist/main.js",
+    "build": "npm run dist:js && electron-builder --mac",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "Steven Wu",
+  "license": "GPL-3.0",
+  "devDependencies": {
+    "@types/mithril": "^2.0.7",
+    "esbuild": "^0.21.0",
+    "electron": "^30.0.0",
+    "electron-builder": "^24.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0",
+    "@vitest/coverage-v8": "^1.6.0"
+  },
+  "dependencies": {
+    "mithril": "^2.0.4"
+  },
+  "build": {
+    "appId": "com.giffrey.app",
+    "productName": "Giffrey",
+    "mac": {
+      "target": "dmg",
+      "icon": "media/android-icon-512x512.png"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*",
+      "encoder/**/*",
+      "media/**/*",
+      "index.html",
+      "main.css"
+    ]
+  }
+}

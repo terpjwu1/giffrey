@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "target": "es6",
+    "rootDir": "src",
+    "noUnusedLocals": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "src",
+    "encoder/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
