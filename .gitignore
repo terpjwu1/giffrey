@@ -1,6 +1,5 @@
 node_modules/
-dist/main.js
-dist/main.js.map
+dist/
 encoder/encoder.js
 encoder/encoder.wasm
 .playwright-mcp/
