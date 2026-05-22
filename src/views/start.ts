@@ -2,7 +2,7 @@ import m from "mithril";
 import { App } from "../types";
 import Button from "../components/button";
 import View from "../components/view";
-import Onboarding from "../components/onboarding";
+
 
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
@@ -19,9 +19,8 @@ export default class StartView implements m.ClassComponent<StartViewAttrs> {
 
   view() {
     return m(View, [
-      m(Onboarding),
-      m("p", "Create animated GIFs from a screen recording."),
-      m("p", "Client-side only, no data is uploaded. Modern browser required."),
+      m("p", "Record your screen and export as GIF or video."),
+      m("p", "Everything stays on your machine."),
       isMobile ? m("p", "Sorry, mobile does not support screen recording.") : undefined,
       isMobile
         ? undefined
