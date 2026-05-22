@@ -1,5 +1,6 @@
 import m from "mithril";
 import { App, Frame } from "../gifcap";
+import { createVideoRecorder, VideoRecording } from "../video-recorder";
 import Button from "../components/button";
 import Timer from "../components/timer";
 import View from "../components/view";
@@ -17,6 +18,7 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
   private width: number = 0;
   private height: number = 0;
   private frames: Frame[] = [];
+  private videoRecorder: VideoRecording | undefined;
   private _onbeforeremove: Function | undefined;
 
   constructor(vnode: m.CVnode<RecordViewAttrs>) {
@@ -29,6 +31,9 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
     const canvas: HTMLCanvasElement = vnode.dom.getElementsByTagName("canvas")[0];
 
     video.srcObject = this.captureStream;
+
+    this.videoRecorder = createVideoRecorder(this.captureStream);
+    this.videoRecorder.start();
 
     const ctx = canvas.getContext("2d", { willReadFrequently: true }) as CanvasRenderingContext2D;
 
@@ -102,10 +107,14 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
   }
 
   private stopRecording(): void {
+    if (this.videoRecorder) {
+      this.videoRecorder.stop();
+    }
     this.app.stopRecording({
       width: this.width,
       height: this.height,
       frames: this.frames,
+      videoBlob: this.videoRecorder ? this.videoRecorder.getBlob() : null,
     });
   }
 }

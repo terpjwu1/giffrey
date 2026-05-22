@@ -31,6 +31,14 @@ export default class PlayView implements m.ClassComponent<PlayViewAttrs> {
     this.gif = vnode.attrs.gif;
   }
 
+  private async saveGif(): Promise<void> {
+    const giffrey = (window as any).giffrey;
+    if (giffrey) {
+      const arrayBuffer = await this.gif.blob.arrayBuffer();
+      await giffrey.saveGif(arrayBuffer);
+    }
+  }
+
   view() {
     const now = new Date();
     const download = `Recording ${pad(now.getFullYear(), 4)}-${pad(now.getMonth() + 1, 2)}-${pad(
@@ -40,13 +48,9 @@ export default class PlayView implements m.ClassComponent<PlayViewAttrs> {
 
     const actions = [
       m(Button, {
-        label: "Download",
+        label: "Save GIF",
         icon: "download",
-        a: {
-          href: this.gif.url,
-          download,
-          target: "_blank",
-        },
+        onclick: () => this.saveGif(),
         primary: true,
       }),
       m(Button, {

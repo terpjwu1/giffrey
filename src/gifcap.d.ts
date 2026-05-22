@@ -7,6 +7,7 @@ export interface Recording {
   readonly width: number;
   readonly height: number;
   readonly frames: Frame[];
+  readonly videoBlob?: Blob | null;
 }
 
 export interface Rect {

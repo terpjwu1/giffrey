@@ -1,5 +1,6 @@
 import m from "mithril";
 import { App, Frame, Recording, Rect, Range, RenderOptions } from "../gifcap";
+import { shouldShowExportVideo, exportVideo } from "../export-video";
 import Button from "../components/button";
 import View from "../components/view";
 
@@ -187,11 +188,18 @@ export default class PreviewView implements m.ClassComponent<PreviewViewAttrs> {
         ),
       ]),
       m(Button, {
-        label: "Render",
+        label: "Render GIF",
         icon: "gear",
         onclick: () => this.startRendering(),
         primary: true,
       }),
+      shouldShowExportVideo(this.recording)
+        ? m(Button, {
+            label: "Export Video",
+            icon: "play",
+            onclick: () => this.exportVideoFile(),
+          })
+        : null,
       m(Button, {
         title: "Discard",
         icon: "trashcan",
@@ -490,5 +498,14 @@ export default class PreviewView implements m.ClassComponent<PreviewViewAttrs> {
       },
       crop: this.crop,
     });
+  }
+
+  private async exportVideoFile(): Promise<void> {
+    if (this.recording.videoBlob) {
+      const giffrey = (window as any).giffrey;
+      if (giffrey) {
+        await exportVideo(this.recording.videoBlob, giffrey);
+      }
+    }
   }
 }
