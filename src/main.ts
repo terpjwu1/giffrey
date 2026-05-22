@@ -1,5 +1,5 @@
 import m from "mithril";
-import { App, Gif, Recording, RenderOptions } from "./gifcap";
+import { App, Gif, Recording, RenderOptions } from "./types";
 import PlayView from "./views/play";
 import PreviewView from "./views/preview";
 import RecordView from "./views/record";
@@ -54,43 +54,21 @@ class Main implements App {
       },
       [
         m("section", { id: "app-body" }, [
-          m("h1", [m("span", { class: "gif" }, "gif"), m("span", { class: "cap" }, "cap")]),
+          m("h1", [m("span", { class: "gif" }, "gif"), m("span", { class: "cap" }, "frey")]),
           this.body(),
         ]),
         m("footer", { id: "app-footer" }, [
           m("span.left", [
-            m("a", { href: "https://github.com/joaomoreno/gifcap" }, [
+            m("a", { href: "https://github.com/terpjwu1/giffrey" }, [
               m("img", {
                 alt: "GitHub",
                 src: "https://icongr.am/octicons/mark-github.svg?size=18&color=9e9e9e",
               }),
-              " joaomoreno/gifcap",
+              " Giffrey",
             ]),
           ]),
-          m("span", [
-            m(
-              "a",
-              {
-                title: "Sponsor me!",
-                href: "https://github.com/sponsors/joaomoreno",
-              },
-              [
-                m("img", {
-                  alt: "GitHub",
-                  src: "https://icongr.am/material/coffee.svg?size=18&color=9e9e9e",
-                }),
-                " Like the tool? Sponsor me!",
-              ]
-            ),
-          ]),
           m("span.right", [
-            "Made with ",
-            m("img", {
-              alt: "love",
-              src: "https://icongr.am/octicons/heart.svg?size=18&color=9e9e9e",
-            }),
-            " by ",
-            m("a", { href: "https://github.com/joaomoreno" }, ["João Moreno"]),
+            "Screen to GIF/Video"
           ]),
         ]),
       ]

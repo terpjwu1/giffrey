@@ -1,5 +1,5 @@
 import m from "mithril";
-import { App, Recording, RenderOptions } from "../gifcap";
+import { App, Recording, RenderOptions } from "../types";
 import Button from "../components/button";
 import View from "../components/view";
 

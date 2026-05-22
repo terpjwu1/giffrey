@@ -1,5 +1,5 @@
 import m from "mithril";
-import { App, Frame, Recording, Rect, Range, RenderOptions } from "../gifcap";
+import { App, Frame, Recording, Rect, Range, RenderOptions } from "../types";
 import { shouldShowExportVideo, exportVideo } from "../export-video";
 import Button from "../components/button";
 import View from "../components/view";

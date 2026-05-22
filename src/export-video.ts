@@ -1,4 +1,4 @@
-import { Recording } from './gifcap';
+import { Recording } from './types';
 
 interface GiffreyAPI {
   saveVideo(blob: ArrayBuffer): Promise<string | null>;

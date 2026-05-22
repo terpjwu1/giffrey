@@ -1,5 +1,5 @@
 import m from "mithril";
-import { App, Frame } from "../gifcap";
+import { App, Frame } from "../types";
 import { createVideoRecorder, VideoRecording } from "../video-recorder";
 import Button from "../components/button";
 import Timer from "../components/timer";
