@@ -24,4 +24,15 @@ contextBridge.exposeInMainWorld('giffrey', {
       filters: [{ name: 'WebM Video', extensions: ['webm'] }],
     });
   },
+  exportMp4: async (request) => {
+    return ipcRenderer.invoke('mp4-export:start', request);
+  },
+  onMp4ExportProgress: (callback) => {
+    const handler = (_event, progress) => callback(progress);
+    ipcRenderer.on('mp4-export:progress', handler);
+    return () => ipcRenderer.removeListener('mp4-export:progress', handler);
+  },
+  cancelMp4Export: async () => {
+    return ipcRenderer.invoke('mp4-export:cancel');
+  },
 });
