@@ -1,6 +1,7 @@
 import m from "mithril";
 import { App, Frame } from "../types";
 import { createVideoRecorder, VideoRecording } from "../video-recorder";
+import { buildCombinedStream } from "../mic-utils";
 import Button from "../components/button";
 import Timer from "../components/timer";
 import View from "../components/view";
@@ -8,31 +9,38 @@ import View from "../components/view";
 interface RecordViewAttrs {
   readonly app: App;
   readonly captureStream: MediaStream;
+  readonly micStream: MediaStream | null;
 }
 
 export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
   private readonly app: App;
   private readonly captureStream: MediaStream;
+  private readonly micStream: MediaStream | null;
 
   private startTime: number = 0;
   private width: number = 0;
   private height: number = 0;
   private frames: Frame[] = [];
+  private hasAudio: boolean = false;
   private videoRecorder: VideoRecording | undefined;
   private _onbeforeremove: Function | undefined;
 
   constructor(vnode: m.CVnode<RecordViewAttrs>) {
     this.app = vnode.attrs.app;
     this.captureStream = vnode.attrs.captureStream;
+    this.micStream = vnode.attrs.micStream;
   }
 
   async oncreate(vnode: m.VnodeDOM<RecordViewAttrs, this>) {
     const video: HTMLVideoElement = vnode.dom.getElementsByTagName("video")[0];
     const canvas: HTMLCanvasElement = vnode.dom.getElementsByTagName("canvas")[0];
 
-    video.srcObject = this.captureStream;
+    const { stream: combinedStream, hasAudio } = buildCombinedStream(this.captureStream, this.micStream);
+    this.hasAudio = hasAudio;
 
-    this.videoRecorder = createVideoRecorder(this.captureStream);
+    video.srcObject = combinedStream;
+
+    this.videoRecorder = createVideoRecorder(combinedStream, hasAudio);
     this.videoRecorder.start();
 
     const ctx = canvas.getContext("2d", { willReadFrequently: true }) as CanvasRenderingContext2D;
@@ -77,7 +85,7 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
       worker.terminate();
       clearInterval(redrawInterval);
       track.removeEventListener("ended", endedListener);
-      track.stop();
+      combinedStream.getTracks().forEach(t => t.stop());
       video.srcObject = null;
     };
 
@@ -111,11 +119,16 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
     if (this.videoRecorder) {
       this.videoRecorder.stop();
     }
+    const durationMs = this.frames.length > 0
+      ? this.frames[this.frames.length - 1].timestamp
+      : 0;
     this.app.stopRecording({
       width: this.width,
       height: this.height,
       frames: this.frames,
       videoBlob: this.videoRecorder ? this.videoRecorder.getBlob() : null,
+      hasAudio: this.hasAudio,
+      durationMs,
     });
   }
 }

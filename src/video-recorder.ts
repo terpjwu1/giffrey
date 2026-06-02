@@ -4,18 +4,19 @@ export interface VideoRecording {
   getBlob(): Blob | null;
 }
 
-export function createVideoRecorder(stream: MediaStream): VideoRecording {
+import { selectMimeType } from './mic-utils';
+
+export function createVideoRecorder(stream: MediaStream, hasAudio: boolean = false): VideoRecording {
   let chunks: Blob[] = [];
   let blob: Blob | null = null;
   let recorder: MediaRecorder | null = null;
+  const mimeType = selectMimeType(hasAudio);
 
   return {
     start() {
       chunks = [];
       blob = null;
-      recorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp9',
-      });
+      recorder = new MediaRecorder(stream, { mimeType });
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
           chunks.push(e.data);

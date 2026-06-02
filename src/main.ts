@@ -17,7 +17,7 @@ const FPS = 12;
 type State =
   | { name: "start" }
   | { name: "playing"; gif: Gif; recording: Recording; renderOptions: RenderOptions }
-  | { name: "recording"; captureStream: MediaStream }
+  | { name: "recording"; captureStream: MediaStream; micStream: MediaStream | null }
   | { name: "previewing"; recording: Recording; renderOptions?: RenderOptions }
   | { name: "rendering"; recording: Recording; renderOptions: RenderOptions };
 
@@ -29,6 +29,7 @@ function assertState<T extends State["name"], E extends T>(actual: T, expected: 
 
 class Main implements App {
   readonly frameLength = Math.floor(1000 / FPS);
+  micEnabled = false;
 
   private _state: State = { name: "start" };
 
@@ -99,7 +100,7 @@ class Main implements App {
       case "playing":
         return m(PlayView, { app: this, gif: this.state.gif });
       case "recording":
-        return m(RecordView, { app: this, captureStream: this.state.captureStream });
+        return m(RecordView, { app: this, captureStream: this.state.captureStream, micStream: this.state.micStream });
       case "previewing":
         return m(PreviewView, { app: this, recording: this.state.recording, renderOptions: this.state.renderOptions });
       case "rendering":
@@ -108,14 +109,27 @@ class Main implements App {
   }
 
   async startRecording() {
+    let micStream: MediaStream | null = null;
+
+    if (this.micEnabled) {
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch {
+        micStream = null;
+      }
+    }
+
     try {
       const captureStream = await navigator.mediaDevices.getDisplayMedia({
         video: { width: 9999, height: 9999 },
       });
 
-      this.state = { name: "recording", captureStream };
+      this.state = { name: "recording", captureStream, micStream };
       m.redraw.sync();
     } catch (err) {
+      if (micStream) {
+        micStream.getTracks().forEach(t => t.stop());
+      }
       console.error(err);
       return;
     }

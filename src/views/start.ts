@@ -24,12 +24,23 @@ export default class StartView implements m.ClassComponent<StartViewAttrs> {
       isMobile ? m("p", "Sorry, mobile does not support screen recording.") : undefined,
       isMobile
         ? undefined
-        : m(Button, {
-            label: "Start Recording",
-            icon: "play",
-            onclick: () => this.app.startRecording(),
-            primary: true,
-          }),
+        : [
+            m("label.mic-toggle", [
+              m("input[type=checkbox]", {
+                checked: this.app.micEnabled,
+                onchange: (e: Event) => {
+                  this.app.micEnabled = (e.target as HTMLInputElement).checked;
+                },
+              }),
+              " Record microphone (voice-over)",
+            ]),
+            m(Button, {
+              label: "Start Recording",
+              icon: "play",
+              onclick: () => this.app.startRecording(),
+              primary: true,
+            }),
+          ],
     ]);
   }
 }

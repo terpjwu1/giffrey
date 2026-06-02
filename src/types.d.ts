@@ -8,6 +8,8 @@ export interface Recording {
   readonly height: number;
   readonly frames: Frame[];
   readonly videoBlob?: Blob | null;
+  readonly hasAudio: boolean;
+  readonly durationMs: number;
 }
 
 export interface Rect {
@@ -36,6 +38,7 @@ export interface Gif {
 
 export interface App {
   readonly frameLength: number;
+  micEnabled: boolean;
   startRecording(): void;
   stopRecording(recording: Recording): void;
   startRendering(renderOptions: RenderOptions): void;
