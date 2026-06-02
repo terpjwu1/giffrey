@@ -98,7 +98,7 @@ class Main implements App {
       case "start":
         return m(StartView, { app: this });
       case "playing":
-        return m(PlayView, { app: this, gif: this.state.gif });
+        return m(PlayView, { app: this, gif: this.state.gif, recording: this.state.recording, renderOptions: this.state.renderOptions });
       case "recording":
         return m(RecordView, { app: this, captureStream: this.state.captureStream, micStream: this.state.micStream });
       case "previewing":
