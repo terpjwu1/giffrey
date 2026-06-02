@@ -37,12 +37,29 @@ class Main implements App {
   }
 
   private set state(state: State) {
+    this.cleanupState(this._state, state);
     this._state = state;
     m.redraw();
   }
 
+  private cleanupState(oldState: State, newState: State): void {
+    if (oldState.name === "playing" && oldState.gif !== (newState.name === "playing" ? newState.gif : undefined)) {
+      // Revoke before publishing the next state so Mithril never keeps a stale object URL alive across redraws.
+      URL.revokeObjectURL(oldState.gif.url);
+    }
+
+    if ("recording" in oldState && newState.name === "start") {
+      oldState.recording.frames.length = 0;
+    }
+  }
+
   constructor() {
-    window.onbeforeunload = () => (this.state.name !== "start" ? "" : null);
+    window.onbeforeunload = () => {
+      if (this.state.name === "recording") {
+        return "";
+      }
+      return null;
+    };
   }
 
   view() {

@@ -78,6 +78,7 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
       clearInterval(redrawInterval);
       track.removeEventListener("ended", endedListener);
       track.stop();
+      video.srcObject = null;
     };
 
     m.redraw();

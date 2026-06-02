@@ -15,6 +15,7 @@ export default class RenderView implements m.ClassComponent<RenderViewAttrs> {
   private readonly renderOptions: RenderOptions;
 
   private progress = 0;
+  private cancelled = false;
   private _onbeforeremove: Function | undefined;
 
   constructor(vnode: m.CVnode<RenderViewAttrs>) {
@@ -29,12 +30,26 @@ export default class RenderView implements m.ClassComponent<RenderViewAttrs> {
       height: this.renderOptions.crop.height,
     });
 
+    this._onbeforeremove = () => {
+      // abort() calls dispose(), which terminates both quantizer workers and the writer worker.
+      this.cancelled = true;
+      gif.abort();
+    };
+
     gif.on("progress", (progress) => {
+      if (this.cancelled) {
+        return;
+      }
+
       this.progress = progress;
       m.redraw();
     });
 
     gif.once("finished", (blob) => {
+      if (this.cancelled) {
+        return;
+      }
+
       const url = URL.createObjectURL(blob);
       const duration =
         this.recording.frames[this.renderOptions.trim.end].timestamp -
@@ -47,8 +62,12 @@ export default class RenderView implements m.ClassComponent<RenderViewAttrs> {
     const ctx = vnode.dom.getElementsByTagName("canvas")[0].getContext("2d", { willReadFrequently: true }) as CanvasRenderingContext2D;
 
     const processFrame = (index: number) => {
+      // A cancellation flag is enough because only one zero-delay timeout is queued at a time.
+      if (this.cancelled) {
+        return;
+      }
+
       if (index > this.renderOptions.trim.end) {
-        this._onbeforeremove = () => gif.abort();
         gif.render();
         return;
       }

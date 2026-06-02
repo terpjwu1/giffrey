@@ -39,6 +39,11 @@ export default class PlayView implements m.ClassComponent<PlayViewAttrs> {
     }
   }
 
+  onbeforeremove(): void {
+    // The state setter revokes on replacement too; double revoke is harmless and covers non-state removals.
+    URL.revokeObjectURL(this.gif.url);
+  }
+
   view() {
     const now = new Date();
     const download = `Recording ${pad(now.getFullYear(), 4)}-${pad(now.getMonth() + 1, 2)}-${pad(
