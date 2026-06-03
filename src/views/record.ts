@@ -129,6 +129,7 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
       height: this.height,
       frames: this.frames,
       videoBlob,
+      tempFilePath: this.videoRecorder?.getTempFilePath() ?? undefined,
       hasAudio: this.hasAudio,
       durationMs,
     });

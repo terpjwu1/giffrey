@@ -43,19 +43,15 @@ export function getFrameIndex(frames: Frame[], timestamp: number, start = 0, end
 
 const noop = () => null;
 const dpr = window.devicePixelRatio || 1;
-const MP4_EXPORT_CHUNK_SIZE = 1024 * 1024;
 
 interface GiffreyMp4ExportResult {
   ok: boolean;
-  sessionId?: string;
   error?: { message: string };
 }
 
 interface GiffreyAPI {
-  initMp4Export: () => Promise<GiffreyMp4ExportResult>;
-  writeMp4ExportChunk: (sessionId: string, chunk: ArrayBuffer) => Promise<GiffreyMp4ExportResult>;
   finalizeMp4Export: (request: {
-    sessionId: string;
+    inputPath: string;
     trim: { startMs: number; endMs: number };
     crop: Rect;
     source: {
@@ -66,7 +62,6 @@ interface GiffreyAPI {
     };
     suggestedFilename: string;
   }) => Promise<GiffreyMp4ExportResult>;
-  cancelMp4Export: () => Promise<GiffreyMp4ExportResult>;
 }
 
 interface PreviewViewAttrs {
@@ -217,19 +212,24 @@ export default class PreviewView implements m.ClassComponent<PreviewViewAttrs> {
         onclick: () => this.startRendering(),
         primary: true,
       }),
-      this.mp4Exporting
-        ? m(".mp4-export-status", [
-            m("span.mp4-phase", this.mp4ExportPhase),
-            m("progress", { max: "1", value: this.mp4ExportProgress }),
-            m("span.mp4-percent", `${Math.floor(this.mp4ExportProgress * 100)}%`),
+      this.mp4ExportError
+        ? m(".mp4-export-error", [
+            m("span", this.mp4ExportError),
+            m(Button, { label: "Dismiss", icon: "x", onclick: () => { this.mp4ExportError = null; } }),
           ])
-        : m(Button, {
-            label: this.recording.hasAudio ? "Export MP4 ♪" : "Export MP4",
-            icon: "video",
-            iconset: "octicons",
-            onclick: () => this.exportMp4(),
-            primary: true,
-          }),
+        : this.mp4Exporting
+          ? m(".mp4-export-status", [
+              m("span.mp4-phase", this.mp4ExportPhase),
+              m("progress", { max: "1", value: this.mp4ExportProgress }),
+              m("span.mp4-percent", `${Math.floor(this.mp4ExportProgress * 100)}%`),
+            ])
+          : m(Button, {
+              label: this.recording.hasAudio ? "Export MP4 ♪" : "Export MP4",
+              icon: "video",
+              iconset: "octicons",
+              onclick: () => this.exportMp4(),
+              primary: true,
+            }),
       m(Button, {
         title: "Discard",
         icon: "trashcan",
@@ -535,9 +535,19 @@ export default class PreviewView implements m.ClassComponent<PreviewViewAttrs> {
   private mp4ExportProgress = 0;
   private cleanupMp4Progress: (() => void) | null = null;
 
+  private mp4ExportError: string | null = null;
+
   private async exportMp4(): Promise<void> {
     const giffrey = (window as Window & { giffrey?: GiffreyAPI & { onMp4ExportProgress?: (cb: (p: { phase: string; ratio: number }) => void) => () => void } }).giffrey;
-    if (!giffrey || !this.recording.videoBlob || this.mp4Exporting) return;
+    if (!giffrey || this.mp4Exporting) return;
+
+    const tempFilePath = this.recording.tempFilePath || (this.recording.videoBlob as any)?.tempFilePath;
+    if (!tempFilePath) {
+      this.mp4ExportError = "Recording file not available. Try recording again.";
+      console.error('[giffrey] Export MP4 failed: no temp file path. recording.tempFilePath =', this.recording.tempFilePath);
+      m.redraw();
+      return;
+    }
 
     this.mp4Exporting = true;
     this.mp4ExportPhase = "Preparing...";
@@ -555,7 +565,6 @@ export default class PreviewView implements m.ClassComponent<PreviewViewAttrs> {
       });
     }
 
-    let sessionId: string | null = null;
     try {
       const trimStart = getFrameIndex(this.recording.frames, this.trim.start);
       const trimEnd = getFrameIndex(this.recording.frames, this.trim.end);
@@ -567,34 +576,11 @@ export default class PreviewView implements m.ClassComponent<PreviewViewAttrs> {
       const filename = `Recording ${pad(now.getFullYear(), 4)}-${pad(now.getMonth() + 1, 2)}-${pad(
         now.getDate(), 2)} at ${pad(now.getHours(), 2)}.${pad(now.getMinutes(), 2)}.${pad(now.getSeconds(), 2)}.mp4`;
 
-      const initResult = await giffrey.initMp4Export();
-      if (!initResult.ok || !initResult.sessionId) {
-        throw new Error(initResult.error?.message || "Failed to start MP4 export");
-      }
-      sessionId = initResult.sessionId;
-
-      // Stream blob in 1MB chunks to avoid freezing the renderer
-      const totalSize = this.recording.videoBlob.size;
-      this.mp4ExportPhase = `Uploading (${Math.round(totalSize / 1024 / 1024)}MB)...`;
-      m.redraw();
-
-      for (let offset = 0; offset < totalSize; offset += MP4_EXPORT_CHUNK_SIZE) {
-        const chunkBlob = this.recording.videoBlob.slice(offset, offset + MP4_EXPORT_CHUNK_SIZE);
-        const chunk: ArrayBuffer = await chunkBlob.arrayBuffer();
-        const chunkResult = await giffrey.writeMp4ExportChunk(sessionId, chunk);
-        if (!chunkResult.ok) {
-          throw new Error(chunkResult.error?.message || "Failed to stream MP4 export data");
-        }
-        this.mp4ExportProgress = Math.min(offset + MP4_EXPORT_CHUNK_SIZE, totalSize) / totalSize;
-        m.redraw();
-      }
-
       this.mp4ExportPhase = "Choose save location...";
-      this.mp4ExportProgress = 1;
       m.redraw();
 
       const exportResult = await giffrey.finalizeMp4Export({
-        sessionId,
+        inputPath: tempFilePath,
         trim: { startMs: trimStartMs, endMs: trimEndMs },
         crop: this.crop,
         source: {
@@ -610,14 +596,12 @@ export default class PreviewView implements m.ClassComponent<PreviewViewAttrs> {
           throw new Error(exportResult.error?.message || "MP4 export failed");
         }
       }
-      sessionId = null;
+    } catch (err: any) {
+      this.mp4ExportError = err.message || "MP4 export failed";
     } finally {
       if (this.cleanupMp4Progress) {
         this.cleanupMp4Progress();
         this.cleanupMp4Progress = null;
-      }
-      if (sessionId) {
-        try { await giffrey.cancelMp4Export(); } catch {}
       }
       this.mp4Exporting = false;
       m.redraw();
