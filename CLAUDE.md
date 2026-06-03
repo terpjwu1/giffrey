@@ -68,6 +68,17 @@ Single-line worker that fires `postMessage` at the configured FPS interval. Deco
 - **Tests**: Vitest (Node environment)
 - **TypeScript**: Strict mode, ES2020
 
+## Testing Rules
+
+**NEVER ask the user to test something you haven't tested yourself first.** Before claiming a fix works:
+
+1. Write an automated test that exercises the REAL scenario (realistic file sizes, realistic durations — not 3-second toy recordings)
+2. Run the test and confirm it passes end-to-end
+3. Send to Codex for review
+4. Only THEN tell the user it's ready
+
+If you can't test it automatically (e.g., native OS dialogs), say so explicitly rather than asking the user to be your QA.
+
 ## CI/CD
 
 GitHub Actions (`.github/workflows/release.yml`) triggers on `v*` tags. Builds Mac + Windows artifacts, downloads encoder WASM from gifcap.dev, creates GitHub Release.
