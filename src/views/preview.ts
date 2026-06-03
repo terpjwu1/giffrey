@@ -568,8 +568,9 @@ export default class PreviewView implements m.ClassComponent<PreviewViewAttrs> {
     try {
       const trimStart = getFrameIndex(this.recording.frames, this.trim.start);
       const trimEnd = getFrameIndex(this.recording.frames, this.trim.end);
-      const trimStartMs = this.recording.frames[trimStart]?.timestamp ?? 0;
-      const trimEndMs = this.recording.frames[trimEnd]?.timestamp ?? this.recording.durationMs;
+      const isFullRange = trimStart === 0 && trimEnd === this.recording.frames.length - 1;
+      const trimStartMs = isFullRange ? 0 : (this.recording.frames[trimStart]?.timestamp ?? 0);
+      const trimEndMs = isFullRange ? -1 : (this.recording.frames[trimEnd]?.timestamp ?? this.recording.durationMs);
 
       const now = new Date();
       const pad = (n: number, d: number) => String(n).padStart(d, "0");

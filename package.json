@@ -55,6 +55,7 @@
       "workers/**/*",
       "encoder/**/*",
       "media/**/*",
+      "fonts/**/*",
       "index.html",
       "main.css"
     ]

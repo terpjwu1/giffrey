@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+@font-face {
+  font-family: 'FK Screamer';
+  src: url('/Users/steven.wu/Documents/fonts/FKScreamerLegacy-Upright.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Noe Display';
+  src: url('/Users/steven.wu/Documents/fonts/NoeDisplay-Regular.woff2') format('woff2');
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'Noe Display';
+  src: url('/Users/steven.wu/Documents/fonts/NoeDisplay-Bold.woff2') format('woff2');
+  font-weight: 700;
+}
+@font-face {
+  font-family: 'Untitled Sans';
+  src: url('/Users/steven.wu/Documents/fonts/untitled-sans-regular.woff2') format('woff2');
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'Untitled Sans';
+  src: url('/Users/steven.wu/Documents/fonts/untitled-sans-bold.woff2') format('woff2');
+  font-weight: 700;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #fafafa;
+  font-family: 'Untitled Sans', sans-serif;
+  min-height: 100vh;
+  padding: 40px;
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+h1 { font-family: 'FK Screamer', sans-serif; text-transform: uppercase; letter-spacing: 2px; }
+h2 { font-family: 'Noe Display', serif; }
+h3 { font-family: 'Noe Display', serif; }
+
+/* De Stijl Colors */
+:root {
+  --red: #D32F2F;
+  --blue: #1565C0;
+  --yellow: #F9A825;
+  --black: #000000;
+  --white: #FAFAFA;
+}
+
+.mockup-frame {
+  border: 4px solid var(--black);
+  background: var(--white);
+  margin-bottom: 40px;
+}
+
+.mockup-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  color: #999;
+  margin-bottom: 12px;
+}
+
+/* === START SCREEN === */
+.start-screen {
+  padding: 60px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+  position: relative;
+}
+
+.start-screen::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 100%;
+  background: var(--red);
+}
+
+.start-screen h1 {
+  font-size: 48px;
+  color: var(--black);
+}
+
+.start-screen .subtitle {
+  font-size: 14px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.btn-record {
+  background: var(--red);
+  color: #fff;
+  border: none;
+  padding: 18px 40px;
+  font-family: 'Untitled Sans', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  cursor: pointer;
+}
+
+.btn-secondary {
+  background: var(--black);
+  color: #fff;
+  border: none;
+  padding: 14px 28px;
+  font-family: 'Untitled Sans', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--black);
+  border: 3px solid var(--black);
+  padding: 12px 28px;
+  font-family: 'Untitled Sans', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.mic-toggle {
+  font-size: 13px;
+  color: #444;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mic-toggle .checkbox {
+  width: 18px;
+  height: 18px;
+  border: 3px solid var(--black);
+  display: inline-block;
+}
+
+/* === PREVIEW SCREEN === */
+.preview-screen {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr auto;
+}
+
+.preview-toolbar {
+  background: var(--black);
+  padding: 12px 20px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.preview-toolbar .btn {
+  background: transparent;
+  border: 2px solid #fff;
+  color: #fff;
+  padding: 8px 16px;
+  font-family: 'Untitled Sans', sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.preview-toolbar .btn.primary {
+  background: var(--blue);
+  border-color: var(--blue);
+}
+
+.preview-toolbar .btn.export {
+  background: var(--red);
+  border-color: var(--red);
+}
+
+.preview-canvas {
+  background: #e8e8e8;
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-top: 4px solid var(--black);
+  border-bottom: 4px solid var(--black);
+}
+
+.preview-canvas .placeholder {
+  color: #aaa;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.timeline {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.timeline-bar {
+  flex: 1;
+  height: 6px;
+  background: #ddd;
+  position: relative;
+}
+
+.timeline-bar .fill {
+  position: absolute;
+  top: 0;
+  left: 10%;
+  width: 60%;
+  height: 100%;
+  background: var(--blue);
+}
+
+.timeline-bar .handle {
+  position: absolute;
+  top: -6px;
+  width: 4px;
+  height: 18px;
+  background: var(--black);
+}
+
+.timeline .time {
+  font-family: 'Noe Display', serif;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--black);
+}
+
+/* === PLAY SCREEN === */
+.play-screen {
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.play-screen .gif-preview {
+  background: #e0e0e0;
+  height: 200px;
+  border: 3px solid var(--black);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.play-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.accent-bar {
+  height: 6px;
+  display: flex;
+}
+.accent-bar .red { flex: 3; background: var(--red); }
+.accent-bar .blue { flex: 2; background: var(--blue); }
+.accent-bar .yellow { flex: 1; background: var(--yellow); }
+</style>
+</head>
+<body>
+<div class="container">
+  <p class="mockup-label">Start Screen</p>
+  <div class="mockup-frame">
+    <div class="accent-bar"><div class="red"></div><div class="blue"></div><div class="yellow"></div></div>
+    <div class="start-screen">
+      <h1>GIFFREY</h1>
+      <p class="subtitle">Screen to GIF / Video</p>
+      <button class="btn-record">Start Recording</button>
+      <label class="mic-toggle">
+        <span class="checkbox"></span>
+        Record microphone
+      </label>
+    </div>
+  </div>
+
+  <p class="mockup-label">Preview / Edit Screen</p>
+  <div class="mockup-frame">
+    <div class="preview-toolbar">
+      <span class="btn">▶ Play</span>
+      <span class="btn primary">Render</span>
+      <span class="btn export">Export MP4</span>
+      <span class="btn">🗑</span>
+    </div>
+    <div class="preview-canvas">
+      <span class="placeholder">Recording preview</span>
+    </div>
+    <div class="timeline">
+      <span class="time">0:00</span>
+      <div class="timeline-bar">
+        <div class="fill"></div>
+        <div class="handle" style="left: 10%;"></div>
+        <div class="handle" style="left: 70%;"></div>
+      </div>
+      <span class="time">2:49</span>
+    </div>
+  </div>
+
+  <p class="mockup-label">Export / Play Screen</p>
+  <div class="mockup-frame">
+    <div class="play-screen">
+      <div class="gif-preview">
+        <span style="color: #999; text-transform: uppercase; letter-spacing: 2px; font-size: 13px;">GIF Preview</span>
+      </div>
+      <div class="play-actions">
+        <button class="btn-record">Save GIF</button>
+        <button class="btn-secondary">Save MP4</button>
+        <button class="btn-outline">Edit</button>
+        <button class="btn-outline">Discard</button>
+      </div>
+    </div>
+    <div class="accent-bar"><div class="red"></div><div class="blue"></div><div class="yellow"></div></div>
+  </div>
+</div>
+</body>
+</html>

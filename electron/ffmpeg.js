@@ -48,25 +48,25 @@ function roundEven(n) {
 function buildFFmpegArgs(options) {
   const { inputPath, outputPath, trim, crop, hasAudio } = options;
 
-  const startSec = (trim.startMs / 1000).toString();
-  const endSec = (trim.endMs / 1000).toString();
-
   const cropW = roundEven(crop.width);
   const cropH = roundEven(crop.height);
   const cropX = roundEven(crop.left);
   const cropY = roundEven(crop.top);
 
-  const args = [
-    '-y',
-    '-i', inputPath,
-    '-ss', startSec,
-    '-to', endSec,
+  const args = ['-y', '-i', inputPath];
+
+  if (trim.endMs > 0) {
+    args.push('-ss', (trim.startMs / 1000).toString());
+    args.push('-to', (trim.endMs / 1000).toString());
+  }
+
+  args.push(
     '-vf', `crop=${cropW}:${cropH}:${cropX}:${cropY}`,
     '-c:v', 'libx264',
     '-pix_fmt', 'yuv420p',
     '-preset', 'fast',
     '-crf', '23',
-  ];
+  );
 
   if (hasAudio) {
     args.push('-c:a', 'aac');

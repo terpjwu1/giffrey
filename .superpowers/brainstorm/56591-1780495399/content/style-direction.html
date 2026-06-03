@@ -1,0 +1,50 @@
+<h2>De Stijl + Brutalism: Which direction?</h2>
+<p class="subtitle">Both movements share bold geometry, but differ in feeling. Where should Giffrey land?</p>
+
+<div class="cards">
+  <div class="card" data-choice="mondrian" onclick="toggleSelect(this)">
+    <div class="card-image" style="height: 200px; display: grid; grid-template-columns: 3fr 1fr; grid-template-rows: 2fr 1fr 1fr; gap: 4px; background: #000; padding: 4px;">
+      <div style="background: #fff; grid-row: 1/3;"></div>
+      <div style="background: #E31E2D;"></div>
+      <div style="background: #fff;"></div>
+      <div style="background: #1B56B5;"></div>
+      <div style="background: #F8D32A;"></div>
+    </div>
+    <div class="card-body">
+      <h3>A. Pure De Stijl</h3>
+      <p>Mondrian grid. Primary colors (red/blue/yellow) on white with thick black borders. Clean, geometric, art-forward.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="brutalist" onclick="toggleSelect(this)">
+    <div class="card-image" style="height: 200px; background: #1a1a1a; display: flex; flex-direction: column; justify-content: center; padding: 20px; font-family: monospace;">
+      <div style="border: 3px solid #fff; padding: 12px; margin-bottom: 8px;">
+        <span style="color: #fff; font-size: 24px; font-weight: 900; text-transform: uppercase; letter-spacing: -1px;">GIFFREY</span>
+      </div>
+      <div style="background: #ff0000; padding: 8px; width: fit-content;">
+        <span style="color: #fff; font-weight: 700; font-size: 14px;">[ RECORD ]</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Raw Brutalism</h3>
+      <p>Dark, raw, exposed structure. Monospace type, harsh borders, system-UI honesty. Functional aggression.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="hybrid" onclick="toggleSelect(this)">
+    <div class="card-image" style="height: 200px; background: #fafafa; display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 4px solid #000;">
+      <div style="background: #000; display: flex; align-items: center; justify-content: center; padding: 20px;">
+        <span style="color: #fff; font-family: 'Helvetica Neue', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: -2px;">gif<span style="color: #E31E2D;">frey</span></span>
+      </div>
+      <div style="background: #fff; display: flex; flex-direction: column; justify-content: center; padding: 20px; gap: 8px;">
+        <div style="background: #E31E2D; height: 36px; display: flex; align-items: center; padding: 0 12px;"><span style="color:#fff; font-weight:700; font-size:12px; font-family: monospace;">REC</span></div>
+        <div style="background: #1B56B5; height: 36px; display: flex; align-items: center; padding: 0 12px;"><span style="color:#fff; font-weight:700; font-size:12px; font-family: monospace;">MP4</span></div>
+        <div style="border: 3px solid #000; height: 36px; display: flex; align-items: center; padding: 0 12px;"><span style="font-weight:700; font-size:12px; font-family: monospace;">GIF</span></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Hybrid (Recommended)</h3>
+      <p>De Stijl color palette + Brutalist typography and structure. Bold black frames, primary color accents, monospace labels, asymmetric grid. The art meets the machine.</p>
+    </div>
+  </div>
+</div>
