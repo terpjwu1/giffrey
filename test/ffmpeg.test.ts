@@ -86,6 +86,21 @@ describe('buildFFmpegArgs', () => {
     expect(args).toContain('aac');
   });
 
+  it('omits trim flags for full-range export sentinel while still applying crop', () => {
+    const args = buildFFmpegArgs({
+      inputPath: '/tmp/input.webm',
+      outputPath: '/tmp/output.mp4',
+      trim: { startMs: 0, endMs: -1 },
+      crop: { left: 10, top: 20, width: 640, height: 480 },
+      hasAudio: true,
+    });
+
+    expect(args).not.toContain('-ss');
+    expect(args).not.toContain('-to');
+    expect(args).toContain('-vf');
+    expect(args).toContain('crop=640:480:10:20');
+  });
+
   it('rounds crop dimensions to even numbers (floors to nearest even)', () => {
     const args = buildFFmpegArgs({
       inputPath: '/tmp/input.webm',

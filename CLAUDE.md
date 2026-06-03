@@ -79,6 +79,8 @@ Single-line worker that fires `postMessage` at the configured FPS interval. Deco
 
 If you can't test it automatically (e.g., native OS dialogs), say so explicitly rather than asking the user to be your QA.
 
+**Test edge cases, not happy paths.** If the user will use 5-minute recordings, test with 10 minutes. If they use audio, test with audio. Never take shortcuts — a 30-second test does NOT validate a 10-minute use case. Over-achieve on test duration and complexity.
+
 ## NEVER KILL THE APP WHILE THE USER IS USING IT
 
 **NEVER run `pkill`, `kill`, or any process-terminating command on Electron/the app without EXPLICITLY asking the user first.** The user's recordings and session state exist only in memory. Killing the app destroys their work permanently. There is no recovery.
