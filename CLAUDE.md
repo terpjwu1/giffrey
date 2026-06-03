@@ -79,6 +79,15 @@ Single-line worker that fires `postMessage` at the configured FPS interval. Deco
 
 If you can't test it automatically (e.g., native OS dialogs), say so explicitly rather than asking the user to be your QA.
 
+## NEVER KILL THE APP WHILE THE USER IS USING IT
+
+**NEVER run `pkill`, `kill`, or any process-terminating command on Electron/the app without EXPLICITLY asking the user first.** The user's recordings and session state exist only in memory. Killing the app destroys their work permanently. There is no recovery.
+
+- If you need to test, launch a SEPARATE instance or use Playwright (which launches its own process)
+- If you need to rebuild, tell the user to restart manually
+- NEVER assume it's safe to kill — always ask
+- Violating this rule wastes the user's time and destroys their data
+
 ## CI/CD
 
 GitHub Actions (`.github/workflows/release.yml`) triggers on `v*` tags. Builds Mac + Windows artifacts, downloads encoder WASM from gifcap.dev, creates GitHub Release.
