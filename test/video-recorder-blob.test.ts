@@ -3,22 +3,23 @@ import { createVideoRecorder } from '../src/video-recorder';
 
 // Mock MediaRecorder behavior in Node
 beforeAll(() => {
-  let handlers: Record<string, Function> = {};
-  let state = 'inactive';
-
   (globalThis as any).MediaRecorder = class MockMediaRecorder {
+    static instances: MockMediaRecorder[] = [];
     stream: any;
     state: string;
+    timeslice: number | undefined;
     ondataavailable: Function | null = null;
     onstop: Function | null = null;
 
     constructor(stream: any, opts: any) {
       this.stream = stream;
       this.state = 'inactive';
+      (globalThis as any).MediaRecorder.instances.push(this);
     }
 
-    start() {
+    start(timeslice?: number) {
       this.state = 'recording';
+      this.timeslice = timeslice;
       // Simulate data arriving after a tick
       setTimeout(() => {
         if (this.ondataavailable) {
@@ -62,6 +63,7 @@ beforeAll(() => {
 describe('createVideoRecorder blob creation', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    (globalThis as any).MediaRecorder.instances = [];
     delete (globalThis as any).window;
     delete (globalThis as any).document;
   });
@@ -119,7 +121,7 @@ describe('createVideoRecorder blob creation', () => {
     expect(blob).toBeNull();
   });
 
-  it('creates a persistent backup session and writes chunks for a 5-minute recording cadence', async () => {
+  it('uses one recorder (no timeslice) and writes blob to persistent recording file on stop', async () => {
     const sessionPath = '/Users/test/Library/Application Support/Electron/recordings/session-test/capture.webm';
     const appendedChunks: ArrayBuffer[] = [];
     const statuses: Array<{ status: string; message: string }> = [];
@@ -132,7 +134,6 @@ describe('createVideoRecorder blob creation', () => {
           appendedChunks.push(chunk);
           return { ok: true, tempFilePath: sessionPath };
         }),
-        replaceRecordingTempFile: vi.fn(async () => ({ ok: true, tempFilePath: sessionPath })),
         finalizeRecordingTempFile: vi.fn(async () => ({ ok: true, tempFilePath: sessionPath })),
       },
       dispatchEvent: vi.fn((event: CustomEvent) => {
@@ -152,9 +153,10 @@ describe('createVideoRecorder blob creation', () => {
 
     const api = (globalThis as any).window.giffrey;
     expect(api.initRecordingTempFile).toHaveBeenCalledTimes(1);
+    expect((globalThis as any).MediaRecorder.instances).toHaveLength(1);
+    expect((globalThis as any).MediaRecorder.instances[0].timeslice).toBeUndefined();
     expect(api.appendRecordingChunk).toHaveBeenCalled();
     expect(appendedChunks.length).toBeGreaterThanOrEqual(2);
-    expect(api.replaceRecordingTempFile).toHaveBeenCalledWith(sessionPath, expect.any(ArrayBuffer));
     expect(api.finalizeRecordingTempFile).toHaveBeenCalledWith(sessionPath);
     expect(recorder.getTempFilePath()).toBe(sessionPath);
     expect(statuses.some(s => s.status === 'writing')).toBe(true);

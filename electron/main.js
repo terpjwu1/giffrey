@@ -221,7 +221,14 @@ ipcMain.handle('recording-temp:replace', async (_event, { tempFilePath, blob }) 
   }
 
   try {
-    fs.writeFileSync(tempFilePath, Buffer.from(blob));
+    const fd = fs.openSync(tempFilePath, 'w');
+    try {
+      fs.writeFileSync(fd, Buffer.from(blob));
+      fs.ftruncateSync(fd);
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
     return { ok: true, tempFilePath };
   } catch (err) {
     return { ok: false, error: createWriteError(err) };
