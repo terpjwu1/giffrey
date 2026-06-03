@@ -27,6 +27,15 @@ contextBridge.exposeInMainWorld('giffrey', {
   exportMp4: async (request) => {
     return ipcRenderer.invoke('mp4-export:start', request);
   },
+  initMp4Export: async () => {
+    return ipcRenderer.invoke('mp4-export:init');
+  },
+  writeMp4ExportChunk: async (sessionId, chunk) => {
+    return ipcRenderer.invoke('mp4-export:chunk', { sessionId, chunk });
+  },
+  finalizeMp4Export: async (request) => {
+    return ipcRenderer.invoke('mp4-export:finalize', request);
+  },
   onMp4ExportProgress: (callback) => {
     const handler = (_event, progress) => callback(progress);
     ipcRenderer.on('mp4-export:progress', handler);

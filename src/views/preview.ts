@@ -1,6 +1,5 @@
 import m from "mithril";
 import { App, Frame, Recording, Rect, Range, RenderOptions } from "../types";
-import { shouldShowExportVideo, exportVideo } from "../export-video";
 import Button from "../components/button";
 import View from "../components/view";
 
@@ -44,6 +43,31 @@ export function getFrameIndex(frames: Frame[], timestamp: number, start = 0, end
 
 const noop = () => null;
 const dpr = window.devicePixelRatio || 1;
+const MP4_EXPORT_CHUNK_SIZE = 1024 * 1024;
+
+interface GiffreyMp4ExportResult {
+  ok: boolean;
+  sessionId?: string;
+  error?: { message: string };
+}
+
+interface GiffreyAPI {
+  initMp4Export: () => Promise<GiffreyMp4ExportResult>;
+  writeMp4ExportChunk: (sessionId: string, chunk: ArrayBuffer) => Promise<GiffreyMp4ExportResult>;
+  finalizeMp4Export: (request: {
+    sessionId: string;
+    trim: { startMs: number; endMs: number };
+    crop: Rect;
+    source: {
+      width: number;
+      height: number;
+      durationMs: number;
+      hasAudio: boolean;
+    };
+    suggestedFilename: string;
+  }) => Promise<GiffreyMp4ExportResult>;
+  cancelMp4Export: () => Promise<GiffreyMp4ExportResult>;
+}
 
 interface PreviewViewAttrs {
   readonly app: App;
@@ -188,18 +212,24 @@ export default class PreviewView implements m.ClassComponent<PreviewViewAttrs> {
         ),
       ]),
       m(Button, {
-        label: "Render GIF",
+        label: "Render",
         icon: "gear",
         onclick: () => this.startRendering(),
         primary: true,
       }),
-      shouldShowExportVideo(this.recording)
-        ? m(Button, {
-            label: "Export Video",
-            icon: "play",
-            onclick: () => this.exportVideoFile(),
-          })
-        : null,
+      this.mp4Exporting
+        ? m(".mp4-export-status", [
+            m("span.mp4-phase", this.mp4ExportPhase),
+            m("progress", { max: "1", value: this.mp4ExportProgress }),
+            m("span.mp4-percent", `${Math.floor(this.mp4ExportProgress * 100)}%`),
+          ])
+        : m(Button, {
+            label: this.recording.hasAudio ? "Export MP4 ♪" : "Export MP4",
+            icon: "video",
+            iconset: "octicons",
+            onclick: () => this.exportMp4(),
+            primary: true,
+          }),
       m(Button, {
         title: "Discard",
         icon: "trashcan",
@@ -500,12 +530,97 @@ export default class PreviewView implements m.ClassComponent<PreviewViewAttrs> {
     });
   }
 
-  private async exportVideoFile(): Promise<void> {
-    if (this.recording.videoBlob) {
-      const giffrey = (window as any).giffrey;
-      if (giffrey) {
-        await exportVideo(this.recording.videoBlob, giffrey);
+  private mp4Exporting = false;
+  private mp4ExportPhase = "";
+  private mp4ExportProgress = 0;
+  private cleanupMp4Progress: (() => void) | null = null;
+
+  private async exportMp4(): Promise<void> {
+    const giffrey = (window as Window & { giffrey?: GiffreyAPI & { onMp4ExportProgress?: (cb: (p: { phase: string; ratio: number }) => void) => () => void } }).giffrey;
+    if (!giffrey || !this.recording.videoBlob || this.mp4Exporting) return;
+
+    this.mp4Exporting = true;
+    this.mp4ExportPhase = "Preparing...";
+    this.mp4ExportProgress = 0;
+    m.redraw();
+
+    // Force paint so user sees the progress UI before we start heavy work
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+    if (giffrey.onMp4ExportProgress) {
+      this.cleanupMp4Progress = giffrey.onMp4ExportProgress((p) => {
+        this.mp4ExportPhase = "Transcoding...";
+        this.mp4ExportProgress = p.ratio;
+        m.redraw();
+      });
+    }
+
+    let sessionId: string | null = null;
+    try {
+      const trimStart = getFrameIndex(this.recording.frames, this.trim.start);
+      const trimEnd = getFrameIndex(this.recording.frames, this.trim.end);
+      const trimStartMs = this.recording.frames[trimStart]?.timestamp ?? 0;
+      const trimEndMs = this.recording.frames[trimEnd]?.timestamp ?? this.recording.durationMs;
+
+      const now = new Date();
+      const pad = (n: number, d: number) => String(n).padStart(d, "0");
+      const filename = `Recording ${pad(now.getFullYear(), 4)}-${pad(now.getMonth() + 1, 2)}-${pad(
+        now.getDate(), 2)} at ${pad(now.getHours(), 2)}.${pad(now.getMinutes(), 2)}.${pad(now.getSeconds(), 2)}.mp4`;
+
+      const initResult = await giffrey.initMp4Export();
+      if (!initResult.ok || !initResult.sessionId) {
+        throw new Error(initResult.error?.message || "Failed to start MP4 export");
       }
+      sessionId = initResult.sessionId;
+
+      // Stream blob in 1MB chunks to avoid freezing the renderer
+      const totalSize = this.recording.videoBlob.size;
+      this.mp4ExportPhase = `Uploading (${Math.round(totalSize / 1024 / 1024)}MB)...`;
+      m.redraw();
+
+      for (let offset = 0; offset < totalSize; offset += MP4_EXPORT_CHUNK_SIZE) {
+        const chunkBlob = this.recording.videoBlob.slice(offset, offset + MP4_EXPORT_CHUNK_SIZE);
+        const chunk: ArrayBuffer = await chunkBlob.arrayBuffer();
+        const chunkResult = await giffrey.writeMp4ExportChunk(sessionId, chunk);
+        if (!chunkResult.ok) {
+          throw new Error(chunkResult.error?.message || "Failed to stream MP4 export data");
+        }
+        this.mp4ExportProgress = Math.min(offset + MP4_EXPORT_CHUNK_SIZE, totalSize) / totalSize;
+        m.redraw();
+      }
+
+      this.mp4ExportPhase = "Choose save location...";
+      this.mp4ExportProgress = 1;
+      m.redraw();
+
+      const exportResult = await giffrey.finalizeMp4Export({
+        sessionId,
+        trim: { startMs: trimStartMs, endMs: trimEndMs },
+        crop: this.crop,
+        source: {
+          width: this.recording.width,
+          height: this.recording.height,
+          durationMs: this.recording.durationMs,
+          hasAudio: this.recording.hasAudio,
+        },
+        suggestedFilename: filename,
+      });
+      if (!exportResult.ok) {
+        if (exportResult.error?.code !== 'cancelled') {
+          throw new Error(exportResult.error?.message || "MP4 export failed");
+        }
+      }
+      sessionId = null;
+    } finally {
+      if (this.cleanupMp4Progress) {
+        this.cleanupMp4Progress();
+        this.cleanupMp4Progress = null;
+      }
+      if (sessionId) {
+        try { await giffrey.cancelMp4Export(); } catch {}
+      }
+      this.mp4Exporting = false;
+      m.redraw();
     }
   }
 }

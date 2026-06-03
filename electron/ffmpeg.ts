@@ -77,9 +77,9 @@ export function buildFFmpegArgs(options: FFmpegExportOptions): string[] {
 
   const args: string[] = [
     '-y',
+    '-i', inputPath,
     '-ss', startSec,
     '-to', endSec,
-    '-i', inputPath,
     '-vf', `crop=${cropW}:${cropH}:${cropX}:${cropY}`,
     '-c:v', 'libx264',
     '-pix_fmt', 'yuv420p',

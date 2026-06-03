@@ -55,7 +55,7 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
       const first = this.startTime === 0;
 
       if (first) {
-        const maxWidth = 1280;
+        const maxWidth = 1920;
         const width = Math.min(video.videoWidth, maxWidth);
         const height = Math.round(video.videoHeight * (width / video.videoWidth));
 
@@ -110,23 +110,25 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
           onclick: () => this.stopRecording(),
         }),
         m("canvas.hidden", { width: 640, height: 480 }),
-        m("video.hidden", { autoplay: true, playsinline: true }),
+        m("video.hidden", { autoplay: true, playsinline: true, muted: true }),
       ]),
     ];
   }
 
-  private stopRecording(): void {
+  private async stopRecording(): Promise<void> {
     if (this.videoRecorder) {
-      this.videoRecorder.stop();
+      await this.videoRecorder.stop();
     }
+    const videoBlob = this.videoRecorder ? this.videoRecorder.getBlob() : null;
     const durationMs = this.frames.length > 0
       ? this.frames[this.frames.length - 1].timestamp
       : 0;
+    console.log('[giffrey] stopRecording:', { videoBlob: videoBlob?.size, frames: this.frames.length, hasAudio: this.hasAudio, durationMs });
     this.app.stopRecording({
       width: this.width,
       height: this.height,
       frames: this.frames,
-      videoBlob: this.videoRecorder ? this.videoRecorder.getBlob() : null,
+      videoBlob,
       hasAudio: this.hasAudio,
       durationMs,
     });

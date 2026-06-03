@@ -61,7 +61,7 @@ describe('validateFFmpeg', () => {
 });
 
 describe('buildFFmpegArgs', () => {
-  it('builds correct args with trim and crop', () => {
+  it('builds correct args with trim and crop (flags after -i for seekable output)', () => {
     const args = buildFFmpegArgs({
       inputPath: '/tmp/input.webm',
       outputPath: '/tmp/output.mp4',
@@ -70,11 +70,15 @@ describe('buildFFmpegArgs', () => {
       hasAudio: true,
     });
 
-    expect(args).toContain('-ss');
+    // -i must come before -ss/-to for reliable trimming of MediaRecorder WebM
+    const iIdx = args.indexOf('-i');
+    const ssIdx = args.indexOf('-ss');
+    const toIdx = args.indexOf('-to');
+    expect(iIdx).toBeLessThan(ssIdx);
+    expect(iIdx).toBeLessThan(toIdx);
+
     expect(args).toContain('5');
-    expect(args).toContain('-to');
     expect(args).toContain('20');
-    expect(args).toContain('-vf');
     expect(args).toContain('crop=640:480:100:50');
     expect(args).toContain('-c:v');
     expect(args).toContain('libx264');
