@@ -7,7 +7,8 @@ export interface Recording {
   readonly width: number;
   readonly height: number;
   readonly frames: Frame[];
-  readonly videoBlob?: Blob | null;
+  readonly videoBlob?: (Blob & { readonly tempFilePath?: string }) | null;
+  readonly tempFilePath?: string;
   readonly hasAudio: boolean;
   readonly durationMs: number;
 }

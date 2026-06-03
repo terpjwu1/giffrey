@@ -83,6 +83,7 @@ ipcMain.handle('save-file', async (event, { blob, filename, filters }) => {
 
 let activeExportJob = null;
 const activeExportSessions = new Map();
+const activeRecordingTempFiles = new Map();
 const MAX_MP4_EXPORT_IPC_BYTES = 1024 * 1024;
 
 function createWriteError(err) {
@@ -158,9 +159,79 @@ function closeSessionStream(session) {
   });
 }
 
+function isActiveRecordingTempFile(tempFilePath) {
+  if (!tempFilePath || !activeRecordingTempFiles.has(tempFilePath)) return false;
+  const resolvedPath = path.resolve(tempFilePath);
+  return resolvedPath === tempFilePath && resolvedPath.startsWith(os.tmpdir() + path.sep);
+}
+
+function isRecordingTempFilePath(tempFilePath) {
+  if (!tempFilePath) return false;
+  const resolvedPath = path.resolve(tempFilePath);
+  return resolvedPath === tempFilePath && resolvedPath.startsWith(os.tmpdir() + path.sep) && path.basename(resolvedPath) === 'capture.webm';
+}
+
+ipcMain.handle('recording-temp:init', async () => {
+  let tempDir;
+  try {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'giffrey-recording-'));
+  } catch (err) {
+    const code = err.code === 'ENOSPC' ? 'disk_full' : 'write_failed';
+    return { ok: false, error: { code, message: `Failed to create recording temp directory: ${err.message}`, recoverable: true } };
+  }
+
+  const tempFilePath = path.join(tempDir, 'capture.webm');
+  try {
+    fs.closeSync(fs.openSync(tempFilePath, 'wx'));
+  } catch (err) {
+    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+    return { ok: false, error: createWriteError(err) };
+  }
+
+  activeRecordingTempFiles.set(tempFilePath, tempDir);
+  return { ok: true, tempFilePath };
+});
+
+ipcMain.handle('recording-temp:append', async (_event, { tempFilePath, chunk }) => {
+  if (!isActiveRecordingTempFile(tempFilePath)) {
+    return { ok: false, error: { code: 'write_failed', message: 'Recording temp file is not available', recoverable: true } };
+  }
+
+  try {
+    fs.appendFileSync(tempFilePath, Buffer.from(chunk));
+    return { ok: true, tempFilePath };
+  } catch (err) {
+    return { ok: false, error: createWriteError(err) };
+  }
+});
+
+ipcMain.handle('recording-temp:replace', async (_event, { tempFilePath, blob }) => {
+  if (!isActiveRecordingTempFile(tempFilePath)) {
+    return { ok: false, error: { code: 'write_failed', message: 'Recording temp file is not available', recoverable: true } };
+  }
+
+  try {
+    fs.writeFileSync(tempFilePath, Buffer.from(blob));
+    return { ok: true, tempFilePath };
+  } catch (err) {
+    return { ok: false, error: createWriteError(err) };
+  }
+});
+
+ipcMain.handle('recording-temp:finalize', async (_event, { tempFilePath }) => {
+  if (!isActiveRecordingTempFile(tempFilePath)) {
+    return { ok: false, error: { code: 'write_failed', message: 'Recording temp file is not available', recoverable: true } };
+  }
+
+  activeRecordingTempFiles.delete(tempFilePath);
+  return { ok: true, tempFilePath };
+});
+
 async function runMp4Export(event, { inputPath, tempDir, trim, crop, source, suggestedFilename }) {
   if (activeExportJob) {
-    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+    if (tempDir) {
+      try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+    }
     return { ok: false, error: { code: 'transcode_failed', message: 'An export is already in progress', recoverable: true } };
   }
 
@@ -170,14 +241,18 @@ async function runMp4Export(event, { inputPath, tempDir, trim, crop, source, sug
   });
 
   if (saveResult.canceled || !saveResult.filePath) {
-    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+    if (tempDir) {
+      try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+    }
     return { ok: false, error: { code: 'cancelled', message: 'Save cancelled', recoverable: true } };
   }
 
   const ffmpegPath = resolveFFmpegPath(app.isPackaged, process.resourcesPath);
   const validation = await validateFFmpeg(ffmpegPath);
   if (!validation.valid) {
-    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+    if (tempDir) {
+      try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+    }
     return { ok: false, error: validation.error };
   }
 
@@ -202,7 +277,9 @@ async function runMp4Export(event, { inputPath, tempDir, trim, crop, source, sug
   } catch (err) {
     return { ok: false, error: { code: 'transcode_failed', message: `Unexpected error: ${err.message}`, recoverable: true } };
   } finally {
-    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+    if (tempDir) {
+      try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+    }
     activeExportJob = null;
   }
 }
@@ -239,7 +316,14 @@ ipcMain.handle('mp4-export:chunk', async (_event, { sessionId, chunk }) => {
 });
 
 ipcMain.handle('mp4-export:finalize', async (event, request) => {
-  const { sessionId, trim, crop, source, suggestedFilename } = request;
+  const { sessionId, inputPath, trim, crop, source, suggestedFilename } = request;
+  if (inputPath) {
+    if (!isRecordingTempFilePath(inputPath) || !fs.existsSync(inputPath)) {
+      return { ok: false, error: { code: 'write_failed', message: 'Recording temp file is not available', recoverable: true } };
+    }
+    return runMp4Export(event, { inputPath, tempDir: null, trim, crop, source, suggestedFilename });
+  }
+
   const session = activeExportSessions.get(sessionId);
   if (!session || session.closed) {
     return { ok: false, error: { code: 'write_failed', message: 'Export session is not available', recoverable: true } };

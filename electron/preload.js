@@ -36,6 +36,18 @@ contextBridge.exposeInMainWorld('giffrey', {
   finalizeMp4Export: async (request) => {
     return ipcRenderer.invoke('mp4-export:finalize', request);
   },
+  initRecordingTempFile: async () => {
+    return ipcRenderer.invoke('recording-temp:init');
+  },
+  appendRecordingChunk: async (tempFilePath, chunk) => {
+    return ipcRenderer.invoke('recording-temp:append', { tempFilePath, chunk });
+  },
+  replaceRecordingTempFile: async (tempFilePath, blob) => {
+    return ipcRenderer.invoke('recording-temp:replace', { tempFilePath, blob });
+  },
+  finalizeRecordingTempFile: async (tempFilePath) => {
+    return ipcRenderer.invoke('recording-temp:finalize', { tempFilePath });
+  },
   onMp4ExportProgress: (callback) => {
     const handler = (_event, progress) => callback(progress);
     ipcRenderer.on('mp4-export:progress', handler);
