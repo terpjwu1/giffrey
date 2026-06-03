@@ -159,25 +159,35 @@ function closeSessionStream(session) {
   });
 }
 
+function getRecordingsDir() {
+  const dir = path.join(app.getPath('userData'), 'recordings');
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+
 function isActiveRecordingTempFile(tempFilePath) {
   if (!tempFilePath || !activeRecordingTempFiles.has(tempFilePath)) return false;
   const resolvedPath = path.resolve(tempFilePath);
-  return resolvedPath === tempFilePath && resolvedPath.startsWith(os.tmpdir() + path.sep);
+  const recordingsDir = getRecordingsDir();
+  return resolvedPath === tempFilePath && resolvedPath.startsWith(recordingsDir + path.sep);
 }
 
 function isRecordingTempFilePath(tempFilePath) {
   if (!tempFilePath) return false;
   const resolvedPath = path.resolve(tempFilePath);
-  return resolvedPath === tempFilePath && resolvedPath.startsWith(os.tmpdir() + path.sep) && path.basename(resolvedPath) === 'capture.webm';
+  const recordingsDir = getRecordingsDir();
+  return resolvedPath === tempFilePath && resolvedPath.startsWith(recordingsDir + path.sep) && path.basename(resolvedPath) === 'capture.webm';
 }
 
 ipcMain.handle('recording-temp:init', async () => {
   let tempDir;
   try {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'giffrey-recording-'));
+    tempDir = fs.mkdtempSync(path.join(getRecordingsDir(), 'session-'));
   } catch (err) {
     const code = err.code === 'ENOSPC' ? 'disk_full' : 'write_failed';
-    return { ok: false, error: { code, message: `Failed to create recording temp directory: ${err.message}`, recoverable: true } };
+    return { ok: false, error: { code, message: `Failed to create recording directory: ${err.message}`, recoverable: true } };
   }
 
   const tempFilePath = path.join(tempDir, 'capture.webm');
@@ -224,6 +234,22 @@ ipcMain.handle('recording-temp:finalize', async (_event, { tempFilePath }) => {
   }
 
   activeRecordingTempFiles.delete(tempFilePath);
+
+  // Extract separate video and audio tracks as independent recovery files
+  const sessionDir = path.dirname(tempFilePath);
+  const ffmpegPath = resolveFFmpegPath(app.isPackaged, process.resourcesPath);
+  const videoPath = path.join(sessionDir, 'video.webm');
+  const audioPath = path.join(sessionDir, 'audio.webm');
+
+  try {
+    const { execFileSync } = require('child_process');
+    execFileSync(ffmpegPath, ['-y', '-i', tempFilePath, '-an', '-c:v', 'copy', videoPath], { timeout: 30000 });
+    execFileSync(ffmpegPath, ['-y', '-i', tempFilePath, '-vn', '-c:a', 'copy', audioPath], { timeout: 30000 });
+    console.log('[giffrey] Recording backup split: video.webm + audio.webm in', sessionDir);
+  } catch (err) {
+    console.error('[giffrey] Failed to split recording tracks (non-fatal):', err.message);
+  }
+
   return { ok: true, tempFilePath };
 });
 
