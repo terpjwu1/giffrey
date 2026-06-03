@@ -123,14 +123,15 @@ export function createVideoRecorder(stream: MediaStream, hasAudio: boolean = fal
           backupRecorder = new MediaRecorder(stream, { mimeType });
           backupRecorder.ondataavailable = (e) => {
             if (e.data.size > 0) {
-              const chunkBlob = e.data;
+              const bufferPromise = e.data.arrayBuffer();
               chunkWriteChain = chunkWriteChain
                 .then(() => tempFileInit)
                 .then(async () => {
                   const path = tempFilePath;
                   const append = getRecordingTempFileAPI()?.appendRecordingChunk;
                   if (!path || !append) return;
-                  const result = await append(path, await chunkBlob.arrayBuffer());
+                  const buffer = await bufferPromise;
+                  const result = await append(path, buffer);
                   if (!result.ok) {
                     throw new Error(result.error?.message || 'Failed to append recording chunk');
                   }

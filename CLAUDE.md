@@ -81,6 +81,25 @@ If you can't test it automatically (e.g., native OS dialogs), say so explicitly 
 
 **Test edge cases, not happy paths.** If the user will use 5-minute recordings, test with 10 minutes. If they use audio, test with audio. Never take shortcuts — a 30-second test does NOT validate a 10-minute use case. Over-achieve on test duration and complexity.
 
+**How to run a real long-duration E2E test:**
+```bash
+# Use --use-fake-device-for-media-stream so recording doesn't auto-stop
+node -e "
+const { _electron } = require('@playwright/test');
+const app = await _electron.launch({ 
+  args: ['electron/main.js', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream']
+});
+// This keeps the recording source alive indefinitely
+// Check every minute that 'Stop Recording' button is still visible
+// After stopping, verify: backup files exist, capture.webm has full duration, export works
+"
+```
+- Regular `desktopCapturer` sources auto-stop after ~30s in Playwright
+- Fake devices provide unlimited video+audio stream
+- Always test WITH mic enabled (`hasAudio: true`) — audio codecs behave differently
+- Verify backup at `~/Library/Application Support/Electron/recordings/session-*/`
+- Verify export produces full duration MP4 with audio stream
+
 ## NEVER KILL THE APP WHILE THE USER IS USING IT
 
 **NEVER run `pkill`, `kill`, or any process-terminating command on Electron/the app without EXPLICITLY asking the user first.** The user's recordings and session state exist only in memory. Killing the app destroys their work permanently. There is no recovery.
