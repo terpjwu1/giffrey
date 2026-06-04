@@ -110,28 +110,25 @@ export function createVideoRecorder(stream: MediaStream, hasAudio: boolean = fal
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
           chunks.push(e.data);
-          const bufferPromise = e.data.arrayBuffer();
-          chunkWriteChain = chunkWriteChain
-            .then(() => tempFileInit)
-            .then(async () => {
-              const path = tempFilePath;
-              const append = getRecordingTempFileAPI()?.appendRecordingChunk;
-              if (!path || !append) return;
-              const buffer = await bufferPromise;
-              const result = await append(path, buffer);
-              if (!result.ok) {
-                throw new Error(result.error?.message || 'Failed to append recording chunk');
-              }
-            })
-            .catch((err) => {
-              tempFileError = reportTempFileError(err, 'append failed');
-            });
         }
       };
       recorder.onstop = async () => {
         blob = new Blob(chunks, { type: 'video/webm' });
         await tempFileInit;
-        await chunkWriteChain;
+        if (!tempFileError && tempFilePath) {
+          const replace = getRecordingTempFileAPI()?.replaceRecordingTempFile;
+          if (replace) {
+            try {
+              const buffer = await blob.arrayBuffer();
+              const result = await replace(tempFilePath, buffer);
+              if (!result.ok) {
+                tempFileError = reportTempFileError(new Error(result.error?.message || 'Failed to write recording'), 'replace failed');
+              }
+            } catch (err) {
+              tempFileError = reportTempFileError(err, 'replace failed');
+            }
+          }
+        }
         if (!tempFileError && tempFilePath) {
           const result = await getRecordingTempFileAPI()?.finalizeRecordingTempFile?.(tempFilePath);
           if (result && (!result.ok || !result.tempFilePath)) {

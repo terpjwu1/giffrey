@@ -134,6 +134,7 @@ describe('createVideoRecorder blob creation', () => {
           appendedChunks.push(chunk);
           return { ok: true, tempFilePath: sessionPath };
         }),
+        replaceRecordingTempFile: vi.fn(async () => ({ ok: true, tempFilePath: sessionPath })),
         finalizeRecordingTempFile: vi.fn(async () => ({ ok: true, tempFilePath: sessionPath })),
       },
       dispatchEvent: vi.fn((event: CustomEvent) => {
@@ -155,8 +156,7 @@ describe('createVideoRecorder blob creation', () => {
     expect(api.initRecordingTempFile).toHaveBeenCalledTimes(1);
     expect((globalThis as any).MediaRecorder.instances).toHaveLength(1);
     expect((globalThis as any).MediaRecorder.instances[0].timeslice).toBeUndefined();
-    expect(api.appendRecordingChunk).toHaveBeenCalled();
-    expect(appendedChunks.length).toBeGreaterThanOrEqual(2);
+    expect(api.replaceRecordingTempFile).toHaveBeenCalledWith(sessionPath, expect.any(ArrayBuffer));
     expect(api.finalizeRecordingTempFile).toHaveBeenCalledWith(sessionPath);
     expect(recorder.getTempFilePath()).toBe(sessionPath);
     expect(statuses.some(s => s.status === 'writing')).toBe(true);
