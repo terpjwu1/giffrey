@@ -60,8 +60,12 @@ function buildFFmpegArgs(options) {
     args.push('-to', (trim.endMs / 1000).toString());
   }
 
+  const isFullCrop = cropX === 0 && cropY === 0;
+  if (!isFullCrop) {
+    args.push('-vf', `crop=${cropW}:${cropH}:${cropX}:${cropY}`);
+  }
+
   args.push(
-    '-vf', `crop=${cropW}:${cropH}:${cropX}:${cropY}`,
     '-c:v', 'libx264',
     '-pix_fmt', 'yuv420p',
     '-preset', 'fast',

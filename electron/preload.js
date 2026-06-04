@@ -39,9 +39,6 @@ contextBridge.exposeInMainWorld('giffrey', {
   initRecordingTempFile: async () => {
     return ipcRenderer.invoke('recording-temp:init');
   },
-  appendRecordingChunk: async (tempFilePath, chunk) => {
-    return ipcRenderer.invoke('recording-temp:append', { tempFilePath, chunk });
-  },
   replaceRecordingTempFile: async (tempFilePath, blob) => {
     return ipcRenderer.invoke('recording-temp:replace', { tempFilePath, blob });
   },

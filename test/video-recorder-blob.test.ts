@@ -121,26 +121,18 @@ describe('createVideoRecorder blob creation', () => {
     expect(blob).toBeNull();
   });
 
-  it('uses one recorder (no timeslice) and writes blob to persistent recording file on stop', async () => {
+  it('uses one no-timeslice recorder and writes the final 10-minute blob only after stop', async () => {
     const sessionPath = '/Users/test/Library/Application Support/Electron/recordings/session-test/capture.webm';
-    const appendedChunks: ArrayBuffer[] = [];
-    const statuses: Array<{ status: string; message: string }> = [];
-    const consoleInfo = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const appendRecordingChunk = vi.fn();
 
     (globalThis as any).window = {
       giffrey: {
         initRecordingTempFile: vi.fn(async () => ({ ok: true, tempFilePath: sessionPath })),
-        appendRecordingChunk: vi.fn(async (_path: string, chunk: ArrayBuffer) => {
-          appendedChunks.push(chunk);
-          return { ok: true, tempFilePath: sessionPath };
-        }),
+        appendRecordingChunk,
         replaceRecordingTempFile: vi.fn(async () => ({ ok: true, tempFilePath: sessionPath })),
         finalizeRecordingTempFile: vi.fn(async () => ({ ok: true, tempFilePath: sessionPath })),
       },
-      dispatchEvent: vi.fn((event: CustomEvent) => {
-        statuses.push(event.detail);
-        return true;
-      }),
+      dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
     };
     (globalThis as any).document = undefined;
@@ -149,16 +141,24 @@ describe('createVideoRecorder blob creation', () => {
     const recorder = createVideoRecorder(stream, true);
     recorder.start();
 
+    const instances = (globalThis as any).MediaRecorder.instances;
+    expect(instances).toHaveLength(1);
+    expect(instances[0].timeslice).toBeUndefined();
+
+    instances[0].ondataavailable?.({
+      data: new Blob([new Uint8Array(1920 * 1080), 'duration-ms:600000'], { type: 'video/webm' }),
+    });
+
     await new Promise(r => setTimeout(r, 50));
     await recorder.stop();
 
     const api = (globalThis as any).window.giffrey;
     expect(api.initRecordingTempFile).toHaveBeenCalledTimes(1);
-    const instances = (globalThis as any).MediaRecorder.instances;
-    expect(instances.length).toBeGreaterThanOrEqual(1);
-    expect(instances[0].timeslice).toBeUndefined();
+    expect(instances).toHaveLength(1);
+    expect(appendRecordingChunk).not.toHaveBeenCalled();
     expect(api.replaceRecordingTempFile).toHaveBeenCalledWith(sessionPath, expect.any(ArrayBuffer));
     expect(api.finalizeRecordingTempFile).toHaveBeenCalledWith(sessionPath);
     expect(recorder.getTempFilePath()).toBe(sessionPath);
+    expect(recorder.getBlob()?.size).toBeGreaterThan(1920 * 1080);
   });
 });

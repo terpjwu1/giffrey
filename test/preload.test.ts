@@ -19,4 +19,9 @@ describe('preload API surface', () => {
     expect(api).toHaveProperty('saveVideo');
     expect(typeof api.saveVideo).toBe('function');
   });
+
+  it('does not expose backup recorder chunk append API', () => {
+    const api = getExposedAPI();
+    expect(api).not.toHaveProperty('appendRecordingChunk');
+  });
 });

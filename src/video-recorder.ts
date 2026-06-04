@@ -15,7 +15,6 @@ interface GiffreyRecordingTempFileResult {
 
 interface GiffreyRecordingTempFileAPI {
   initRecordingTempFile: () => Promise<GiffreyRecordingTempFileResult>;
-  appendRecordingChunk: (tempFilePath: string, chunk: ArrayBuffer) => Promise<GiffreyRecordingTempFileResult>;
   replaceRecordingTempFile: (tempFilePath: string, blob: ArrayBuffer) => Promise<GiffreyRecordingTempFileResult>;
   finalizeRecordingTempFile: (tempFilePath: string) => Promise<GiffreyRecordingTempFileResult>;
 }
@@ -31,13 +30,9 @@ export function createVideoRecorder(stream: MediaStream, hasAudio: boolean = fal
   let chunks: Blob[] = [];
   let blob: Blob | null = null;
   let recorder: MediaRecorder | null = null;
-  let backupRecorder: MediaRecorder | null = null;
   let stopped: Promise<void> | null = null;
   let resolveStop: (() => void) | null = null;
-  let backupStopped: Promise<void> = Promise.resolve();
-  let resolveBackupStop: (() => void) | null = null;
   let tempFilePath: string | null = null;
-  let chunkWriteChain = Promise.resolve();
   let tempFileInit: Promise<void> = Promise.resolve();
   let tempFileError: Error | null = null;
   const mimeType = selectMimeType(hasAudio);
@@ -47,10 +42,7 @@ export function createVideoRecorder(stream: MediaStream, hasAudio: boolean = fal
       chunks = [];
       blob = null;
       recorder = null;
-      backupRecorder = null;
       tempFilePath = null;
-      backupStopped = Promise.resolve();
-      chunkWriteChain = Promise.resolve();
       tempFileError = null;
       const giffrey = getRecordingTempFileAPI();
       tempFileInit = giffrey?.initRecordingTempFile
@@ -70,47 +62,16 @@ export function createVideoRecorder(stream: MediaStream, hasAudio: boolean = fal
           chunks.push(e.data);
         }
       };
-      if (giffrey?.appendRecordingChunk) {
-        try {
-          backupStopped = new Promise((resolve) => { resolveBackupStop = resolve; });
-          backupRecorder = new MediaRecorder(stream, { mimeType });
-          backupRecorder.ondataavailable = (e) => {
-            if (e.data.size > 0) {
-              const chunkBlob = e.data;
-              chunkWriteChain = chunkWriteChain
-                .then(() => tempFileInit)
-                .then(async () => {
-                  const path = tempFilePath;
-                  const append = getRecordingTempFileAPI()?.appendRecordingChunk;
-                  if (!path || !append) return;
-                  const result = await append(path, await chunkBlob.arrayBuffer());
-                  if (!result.ok) {
-                    throw new Error(result.error?.message || 'Failed to append recording chunk');
-                  }
-                })
-                .catch((err) => {
-                  tempFileError = err;
-                });
-            }
-          };
-          backupRecorder.onstop = () => {
-            resolveBackupStop?.();
-            resolveBackupStop = null;
-          };
-          backupRecorder.start(1000);
-        } catch (err) {
-          backupRecorder = null;
-          backupStopped = Promise.resolve();
-          resolveBackupStop = null;
-          console.error('[giffrey] recording backup failed:', err);
-        }
-      }
       recorder.onstop = async () => {
         blob = new Blob(chunks, { type: 'video/webm' });
         await tempFileInit;
-        await backupStopped;
-        await chunkWriteChain;
-        if (!tempFileError && tempFilePath) {
+        // Electron 30/Chromium corrupts MediaRecorder timestamps when a second
+        // recorder writes backup chunks from the same screen+mic stream. Keep a
+        // single no-timeslice recorder for clean DTS; this intentionally gives
+        // up crash recovery until a backup path that does not record the stream
+        // concurrently is available.
+        // Backup chunk errors do not affect the main recorder blob, so always write the final blob.
+        if (tempFilePath) {
           const replace = getRecordingTempFileAPI()?.replaceRecordingTempFile;
           if (replace) {
             const result = await replace(tempFilePath, await blob.arrayBuffer());
@@ -121,7 +82,7 @@ export function createVideoRecorder(stream: MediaStream, hasAudio: boolean = fal
             }
           }
         }
-        if (!tempFileError && tempFilePath) {
+        if (tempFilePath) {
           const result = await getRecordingTempFileAPI()?.finalizeRecordingTempFile?.(tempFilePath);
           if (result && (!result.ok || !result.tempFilePath)) {
             tempFileError = new Error(result.error?.message || 'Failed to finalize recording temp file');
@@ -141,9 +102,6 @@ export function createVideoRecorder(stream: MediaStream, hasAudio: boolean = fal
       recorder.start();
     },
     async stop() {
-      if (backupRecorder && backupRecorder.state !== 'inactive') {
-        backupRecorder.stop();
-      }
       if (recorder && recorder.state !== 'inactive') {
         recorder.stop();
       }

@@ -70,13 +70,10 @@ export default class PlayView implements m.ClassComponent<PlayViewAttrs> {
         now.getDate(), 2
       )} at ${pad(now.getHours(), 2)}.${pad(now.getMinutes(), 2)}.${pad(now.getSeconds(), 2)}.mp4`;
 
-      const webm = await this.recording.videoBlob.arrayBuffer();
       const frames = this.recording.frames;
       const trimStartMs = frames[this.renderOptions.trim.start]?.timestamp ?? 0;
       const trimEndMs = frames[this.renderOptions.trim.end]?.timestamp ?? this.recording.durationMs;
-
-      const result = await giffrey.exportMp4({
-        webm,
+      const request = {
         trim: { startMs: trimStartMs, endMs: trimEndMs },
         crop: this.renderOptions.crop,
         source: {
@@ -86,7 +83,11 @@ export default class PlayView implements m.ClassComponent<PlayViewAttrs> {
           hasAudio: this.recording.hasAudio,
         },
         suggestedFilename: filename,
-      });
+      };
+
+      const result = this.recording.tempFilePath
+        ? await giffrey.finalizeMp4Export({ ...request, inputPath: this.recording.tempFilePath })
+        : await giffrey.exportMp4({ ...request, webm: await this.recording.videoBlob.arrayBuffer() });
 
       if (!result.ok && result.error.code !== 'cancelled') {
         this.mp4Error = result.error.message;

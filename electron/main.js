@@ -202,33 +202,14 @@ ipcMain.handle('recording-temp:init', async () => {
   return { ok: true, tempFilePath };
 });
 
-ipcMain.handle('recording-temp:append', async (_event, { tempFilePath, chunk }) => {
-  if (!isActiveRecordingTempFile(tempFilePath)) {
-    return { ok: false, error: { code: 'write_failed', message: 'Recording temp file is not available', recoverable: true } };
-  }
-
-  try {
-    fs.appendFileSync(tempFilePath, Buffer.from(chunk));
-    return { ok: true, tempFilePath };
-  } catch (err) {
-    return { ok: false, error: createWriteError(err) };
-  }
-});
-
 ipcMain.handle('recording-temp:replace', async (_event, { tempFilePath, blob }) => {
   if (!isActiveRecordingTempFile(tempFilePath)) {
     return { ok: false, error: { code: 'write_failed', message: 'Recording temp file is not available', recoverable: true } };
   }
 
   try {
-    const fd = fs.openSync(tempFilePath, 'w');
-    try {
-      fs.writeFileSync(fd, Buffer.from(blob));
-      fs.ftruncateSync(fd);
-      fs.fsyncSync(fd);
-    } finally {
-      fs.closeSync(fd);
-    }
+    const buffer = Buffer.from(blob);
+    fs.writeFileSync(tempFilePath, buffer);
     return { ok: true, tempFilePath };
   } catch (err) {
     return { ok: false, error: createWriteError(err) };
@@ -241,22 +222,6 @@ ipcMain.handle('recording-temp:finalize', async (_event, { tempFilePath }) => {
   }
 
   activeRecordingTempFiles.delete(tempFilePath);
-
-  // Extract separate video and audio tracks as independent recovery files
-  const sessionDir = path.dirname(tempFilePath);
-  const ffmpegPath = resolveFFmpegPath(app.isPackaged, process.resourcesPath);
-  const videoPath = path.join(sessionDir, 'video.webm');
-  const audioPath = path.join(sessionDir, 'audio.webm');
-
-  try {
-    const { execFileSync } = require('child_process');
-    execFileSync(ffmpegPath, ['-y', '-i', tempFilePath, '-an', '-c:v', 'copy', videoPath], { timeout: 30000 });
-    execFileSync(ffmpegPath, ['-y', '-i', tempFilePath, '-vn', '-c:a', 'copy', audioPath], { timeout: 30000 });
-    console.log('[giffrey] Recording backup split: video.webm + audio.webm in', sessionDir);
-  } catch (err) {
-    console.error('[giffrey] Failed to split recording tracks (non-fatal):', err.message);
-  }
-
   return { ok: true, tempFilePath };
 });
 
