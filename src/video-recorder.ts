@@ -92,6 +92,7 @@ export function createVideoRecorder(stream: MediaStream, hasAudio: boolean = fal
         }
         if (tempFileError) {
           console.error('[giffrey] recording temp file failed:', tempFileError);
+          tempFilePath = null;
         }
         if (tempFilePath) {
           (blob as RecordingBlob).tempFilePath = tempFilePath;

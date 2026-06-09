@@ -161,4 +161,31 @@ describe('createVideoRecorder blob creation', () => {
     expect(recorder.getTempFilePath()).toBe(sessionPath);
     expect(recorder.getBlob()?.size).toBeGreaterThan(1920 * 1080);
   });
+
+  it('does not expose an empty temp file path when the final blob write fails', async () => {
+    const sessionPath = '/Users/test/Library/Application Support/Electron/recordings/session-test/capture.webm';
+
+    (globalThis as any).window = {
+      giffrey: {
+        initRecordingTempFile: vi.fn(async () => ({ ok: true, tempFilePath: sessionPath })),
+        replaceRecordingTempFile: vi.fn(async () => ({ ok: false, error: { message: 'IPC payload failed' } })),
+        finalizeRecordingTempFile: vi.fn(async () => ({ ok: true, tempFilePath: sessionPath })),
+      },
+    };
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const recorder = createVideoRecorder({} as MediaStream, true);
+    recorder.start();
+
+    await new Promise(r => setTimeout(r, 50));
+    await recorder.stop();
+
+    const api = (globalThis as any).window.giffrey;
+    expect(api.replaceRecordingTempFile).toHaveBeenCalledWith(sessionPath, expect.any(ArrayBuffer));
+    expect(api.finalizeRecordingTempFile).toHaveBeenCalledWith(sessionPath);
+    expect(recorder.getBlob()?.size).toBeGreaterThan(0);
+    expect(recorder.getTempFilePath()).toBeNull();
+    expect((recorder.getBlob() as any)?.tempFilePath).toBeUndefined();
+    expect(consoleError).toHaveBeenCalled();
+  });
 });

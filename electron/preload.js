@@ -1,5 +1,29 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+const RECORDING_TEMP_CHUNK_BYTES = 1024 * 1024;
+
+async function writeRecordingTempFile(tempFilePath, blob) {
+  const buffer = blob instanceof ArrayBuffer
+    ? blob
+    : blob.buffer.slice(blob.byteOffset, blob.byteOffset + blob.byteLength);
+  const init = await ipcRenderer.invoke('recording-temp:replace:init', { tempFilePath });
+  if (!init.ok) return init;
+
+  for (let offset = 0; offset < buffer.byteLength; offset += RECORDING_TEMP_CHUNK_BYTES) {
+    const chunk = buffer.slice(offset, offset + RECORDING_TEMP_CHUNK_BYTES);
+    const result = await ipcRenderer.invoke('recording-temp:replace:chunk', {
+      tempFilePath,
+      chunk,
+    });
+    if (!result.ok) return result;
+  }
+
+  return ipcRenderer.invoke('recording-temp:replace:complete', {
+    tempFilePath,
+    expectedBytes: buffer.byteLength,
+  });
+}
+
 contextBridge.exposeInMainWorld('giffrey', {
   saveFile: async (blob, filename, filters) => {
     return ipcRenderer.invoke('save-file', {
@@ -40,7 +64,7 @@ contextBridge.exposeInMainWorld('giffrey', {
     return ipcRenderer.invoke('recording-temp:init');
   },
   replaceRecordingTempFile: async (tempFilePath, blob) => {
-    return ipcRenderer.invoke('recording-temp:replace', { tempFilePath, blob });
+    return writeRecordingTempFile(tempFilePath, blob);
   },
   finalizeRecordingTempFile: async (tempFilePath) => {
     return ipcRenderer.invoke('recording-temp:finalize', { tempFilePath });

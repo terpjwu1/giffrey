@@ -84,6 +84,7 @@ ipcMain.handle('save-file', async (event, { blob, filename, filters }) => {
 let activeExportJob = null;
 const activeExportSessions = new Map();
 const activeRecordingTempFiles = new Map();
+const activeRecordingReplaceSessions = new Map();
 const MAX_MP4_EXPORT_IPC_BYTES = 1024 * 1024;
 
 function createWriteError(err) {
@@ -181,6 +182,15 @@ function isRecordingTempFilePath(tempFilePath) {
   return resolvedPath === tempFilePath && resolvedPath.startsWith(recordingsDir + path.sep) && path.basename(resolvedPath) === 'capture.webm';
 }
 
+function abortRecordingReplace(tempFilePath) {
+  const session = activeRecordingReplaceSessions.get(tempFilePath);
+  if (!session) return;
+
+  activeRecordingReplaceSessions.delete(tempFilePath);
+  try { session.stream.destroy(); } catch {}
+  try { fs.rmSync(session.stagingPath, { force: true }); } catch {}
+}
+
 ipcMain.handle('recording-temp:init', async () => {
   let tempDir;
   try {
@@ -216,9 +226,87 @@ ipcMain.handle('recording-temp:replace', async (_event, { tempFilePath, blob }) 
   }
 });
 
+ipcMain.handle('recording-temp:replace:init', async (_event, { tempFilePath }) => {
+  if (!isActiveRecordingTempFile(tempFilePath)) {
+    return { ok: false, error: { code: 'write_failed', message: 'Recording temp file is not available', recoverable: true } };
+  }
+
+  abortRecordingReplace(tempFilePath);
+  const stagingPath = `${tempFilePath}.part`;
+  try {
+    const stream = fs.createWriteStream(stagingPath, { flags: 'w' });
+    activeRecordingReplaceSessions.set(tempFilePath, { stagingPath, stream, bytesWritten: 0, error: null });
+    stream.on('error', (err) => {
+      const session = activeRecordingReplaceSessions.get(tempFilePath);
+      if (session) session.error = err;
+    });
+    return { ok: true, tempFilePath };
+  } catch (err) {
+    return { ok: false, error: createWriteError(err) };
+  }
+});
+
+ipcMain.handle('recording-temp:replace:chunk', async (_event, { tempFilePath, chunk }) => {
+  if (!isActiveRecordingTempFile(tempFilePath)) {
+    abortRecordingReplace(tempFilePath);
+    return { ok: false, error: { code: 'write_failed', message: 'Recording temp file is not available', recoverable: true } };
+  }
+
+  const session = activeRecordingReplaceSessions.get(tempFilePath);
+  if (!session) {
+    return { ok: false, error: { code: 'write_failed', message: 'Recording temp file write is not initialized', recoverable: true } };
+  }
+
+  const result = await writeSessionChunk(session, chunk);
+  if (!result.ok) {
+    abortRecordingReplace(tempFilePath);
+    return result;
+  }
+
+  session.bytesWritten += Buffer.byteLength(Buffer.from(chunk));
+  return { ok: true, tempFilePath };
+});
+
+ipcMain.handle('recording-temp:replace:complete', async (_event, { tempFilePath, expectedBytes }) => {
+  if (!isActiveRecordingTempFile(tempFilePath)) {
+    abortRecordingReplace(tempFilePath);
+    return { ok: false, error: { code: 'write_failed', message: 'Recording temp file is not available', recoverable: true } };
+  }
+
+  const session = activeRecordingReplaceSessions.get(tempFilePath);
+  if (!session) {
+    return { ok: false, error: { code: 'write_failed', message: 'Recording temp file write is not initialized', recoverable: true } };
+  }
+
+  const closeResult = await closeSessionStream(session);
+  if (!closeResult.ok) {
+    abortRecordingReplace(tempFilePath);
+    return closeResult;
+  }
+
+  if (session.bytesWritten !== expectedBytes) {
+    abortRecordingReplace(tempFilePath);
+    return { ok: false, error: { code: 'write_failed', message: `Recording temp file write was incomplete: expected ${expectedBytes} bytes, wrote ${session.bytesWritten}`, recoverable: true } };
+  }
+
+  try {
+    fs.renameSync(session.stagingPath, tempFilePath);
+  } catch (err) {
+    abortRecordingReplace(tempFilePath);
+    return { ok: false, error: createWriteError(err) };
+  }
+
+  activeRecordingReplaceSessions.delete(tempFilePath);
+  return { ok: true, tempFilePath };
+});
+
 ipcMain.handle('recording-temp:finalize', async (_event, { tempFilePath }) => {
   if (!isActiveRecordingTempFile(tempFilePath)) {
     return { ok: false, error: { code: 'write_failed', message: 'Recording temp file is not available', recoverable: true } };
+  }
+
+  if (activeRecordingReplaceSessions.has(tempFilePath)) {
+    return { ok: false, error: { code: 'write_failed', message: 'Recording temp file write is still in progress', recoverable: true } };
   }
 
   activeRecordingTempFiles.delete(tempFilePath);
