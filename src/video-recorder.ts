@@ -56,7 +56,7 @@ export function createVideoRecorder(stream: MediaStream, hasAudio: boolean = fal
           })
         : Promise.resolve();
       stopped = new Promise((resolve) => { resolveStop = resolve; });
-      recorder = new MediaRecorder(stream, { mimeType });
+      recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8_000_000 });
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
           chunks.push(e.data);

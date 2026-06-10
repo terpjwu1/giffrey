@@ -83,8 +83,8 @@ export function buildFFmpegArgs(options: FFmpegExportOptions): string[] {
     '-vf', `crop=${cropW}:${cropH}:${cropX}:${cropY}`,
     '-c:v', 'libx264',
     '-pix_fmt', 'yuv420p',
-    '-preset', 'fast',
-    '-crf', '23',
+    '-preset', 'medium',
+    '-crf', '18',
   );
 
   if (hasAudio) {

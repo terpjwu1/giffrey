@@ -68,8 +68,8 @@ function buildFFmpegArgs(options) {
   args.push(
     '-c:v', 'libx264',
     '-pix_fmt', 'yuv420p',
-    '-preset', 'fast',
-    '-crf', '23',
+    '-preset', 'medium',
+    '-crf', '18',
   );
 
   if (hasAudio) {
