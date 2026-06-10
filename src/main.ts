@@ -121,7 +121,11 @@ class Main implements App {
 
     try {
       const captureStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { width: 9999, height: 9999 },
+        video: {
+          width: { ideal: 9999 },
+          height: { ideal: 9999 },
+          frameRate: { ideal: 30 },
+        } as any,
       });
 
       this.state = { name: "recording", captureStream, micStream };

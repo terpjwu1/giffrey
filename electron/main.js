@@ -1,4 +1,4 @@
-const { app, BrowserWindow, protocol, session, ipcMain, dialog, desktopCapturer, net } = require('electron');
+const { app, BrowserWindow, protocol, session, ipcMain, dialog, desktopCapturer, net, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -48,6 +48,15 @@ app.whenReady().then(() => {
         callback({});
       }
     });
+  });
+
+  ipcMain.handle('display:get-capture-info', () => {
+    const point = screen.getCursorScreenPoint();
+    const display = screen.getDisplayNearestPoint(point) || screen.getPrimaryDisplay();
+    return {
+      scaleFactor: display?.scaleFactor || 1,
+      size: display?.size || null,
+    };
   });
 
   mainWindow = new BrowserWindow({

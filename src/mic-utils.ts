@@ -1,5 +1,6 @@
 export function selectMimeType(hasAudio: boolean): string {
-  return hasAudio ? 'video/webm;codecs=vp9,opus' : 'video/webm;codecs=vp9';
+  // VP8 respects videoBitsPerSecond; VP9's screen-content mode ignores it
+  return hasAudio ? 'video/webm;codecs=vp8,opus' : 'video/webm;codecs=vp8';
 }
 
 export interface CombinedStreamResult {
@@ -7,18 +8,31 @@ export interface CombinedStreamResult {
   hasAudio: boolean;
 }
 
+export function getAudioTracks(micStream: MediaStream | null): MediaStreamTrack[] {
+  return micStream ? micStream.getAudioTracks() : [];
+}
+
 export function buildCombinedStream(
   displayStream: MediaStream,
   micStream: MediaStream | null
 ): CombinedStreamResult {
-  const tracks: MediaStreamTrack[] = [...displayStream.getVideoTracks()];
-
-  if (micStream) {
-    tracks.push(...micStream.getAudioTracks());
-  }
+  const audioTracks = getAudioTracks(micStream);
+  const tracks: MediaStreamTrack[] = [...displayStream.getVideoTracks(), ...audioTracks];
 
   return {
     stream: new MediaStream(tracks),
-    hasAudio: micStream !== null && micStream.getAudioTracks().length > 0,
+    hasAudio: audioTracks.length > 0,
+  };
+}
+
+export function buildCanvasRecordingStream(
+  canvasStream: MediaStream,
+  micStream: MediaStream | null
+): CombinedStreamResult {
+  const audioTracks = getAudioTracks(micStream);
+
+  return {
+    stream: new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]),
+    hasAudio: audioTracks.length > 0,
   };
 }

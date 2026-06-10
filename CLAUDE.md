@@ -36,7 +36,7 @@ Each state maps to a view in `src/views/`. State transitions trigger `m.redraw()
 
 ### Data Flow
 
-1. **Capture** (`src/views/record.ts`): `getDisplayMedia()` + Web Worker ticker at 12 FPS → canvas drawImage → `ImageData` frames with timestamps. Simultaneously records WebM via `MediaRecorder`.
+1. **Capture** (`src/views/record.ts`): `getDisplayMedia()` + Web Worker ticker at 12 FPS → canvas drawImage → `ImageData` frames with timestamps. Simultaneously records WebM via `MediaRecorder` using a canvas `captureStream()` (see Retina Recording below).
 2. **Edit** (`src/views/preview.ts`): Interactive trim (start/end frame) and crop (drag/resize box). Produces `RenderOptions`.
 3. **Encode** (`src/views/render.ts`): Iterates frames, extracts cropped region, feeds to `GifEncoder`. Uses `setTimeout(0)` per frame to avoid blocking.
 4. **Save** (`src/views/play.ts`): Blob → IPC → native save dialog → `fs.writeFileSync`.
@@ -108,6 +108,34 @@ const app = await _electron.launch({
 - If you need to rebuild, tell the user to restart manually
 - NEVER assume it's safe to kill — always ask
 - Violating this rule wastes the user's time and destroys their data
+
+## Retina Recording & Quality Architecture
+
+### Known Limitation: Electron 30 captures at logical pixels
+
+Electron's `setDisplayMediaRequestHandler` + `desktopCapturer` delivers video streams in **CSS/logical pixels** on macOS Retina (e.g., 1728x1116 on a 2x display that's 3456x2234 physical). There is no Electron API to request physical-pixel capture.
+
+**Current workaround** (`src/capture-resolution.ts`):
+1. Query the display's `scaleFactor` from main process (`screen.getPrimaryDisplay()`)
+2. Create a canvas at physical dimensions (logical × scaleFactor)
+3. Draw the logical-pixel stream upscaled onto the physical-size canvas
+4. Record the canvas via `canvas.captureStream()` → MediaRecorder
+
+This produces a video at full Retina resolution (3456x2234) but it's **upscaled** from logical pixels — not true native capture. Text looks good but not pixel-perfect.
+
+**True native capture** would require Apple's ScreenCaptureKit via a native addon (Swift/ObjC bridge). This is a potential future enhancement.
+
+### Recording quality settings
+
+| Setting | Value | Location |
+|---------|-------|----------|
+| MediaRecorder codec | VP8 + Opus | `src/mic-utils.ts` |
+| MediaRecorder bitrate | 8 Mbps (`videoBitsPerSecond`) | `src/video-recorder.ts` |
+| FFmpeg video codec | H.264 (libx264) | `electron/ffmpeg.ts` |
+| FFmpeg quality | CRF 18 (near visually lossless) | `electron/ffmpeg.ts` |
+| FFmpeg preset | medium | `electron/ffmpeg.ts` |
+
+Note: Chrome ignores `videoBitsPerSecond` for raw `getDisplayMedia` streams (screen-content mode). The canvas captureStream workaround bypasses this because Chrome treats canvas streams as non-screen content.
 
 ## CI/CD
 

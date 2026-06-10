@@ -77,4 +77,7 @@ contextBridge.exposeInMainWorld('giffrey', {
   cancelMp4Export: async () => {
     return ipcRenderer.invoke('mp4-export:cancel');
   },
+  getDisplayCaptureInfo: async () => {
+    return ipcRenderer.invoke('display:get-capture-info');
+  },
 });
