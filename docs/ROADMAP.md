@@ -53,6 +53,37 @@ Currently the Swift helper always uses `backingScaleFactor` to determine physica
 - **Quality** (CRF 18, medium preset) — current default
 - **Archive** (CRF 0, veryslow) — lossless master copy
 
+### Multi-Cut Editor (Remove Dead Space)
+Go beyond simple start/end trimming — allow cutting out arbitrary segments from the middle of a recording.
+
+**Use case:** You record a 5-minute demo but have 30 seconds of waiting for a page to load, 10 seconds of fumbling with a menu, etc. Cut those out and export a tight, polished clip.
+
+**Concept:**
+```
+Timeline:  [████████░░░░████████████░░████████████]
+                     ↑           ↑
+               cut out these dead sections
+               
+Result:    [████████████████████████████████████]
+           (seamless, shorter video)
+```
+
+**Implementation approach:**
+1. Timeline UI: visual waveform/thumbnail strip with frame-level scrubbing
+2. Mark IN/OUT points for segments to keep (or segments to remove)
+3. Multiple cut regions stored as array: `[{start, end}, {start, end}, ...]`
+4. FFmpeg concat demuxer: split into segments, then concatenate
+   ```
+   ffmpeg -i input.mp4 -vf "select='between(t,0,5)+between(t,8,15)+between(t,20,30)',setpts=N/FRAME_RATE/TB" -af "aselect='...', asetpts=N/SR/TB" output.mp4
+   ```
+5. Or use the FFmpeg concat protocol with segment files (more reliable for long recordings)
+
+**Key decisions:**
+- Frame-accurate cuts vs keyframe-aligned cuts (keyframe = instant but less precise)
+- Show waveform for audio (helps identify silence/dead space)
+- Auto-detect silence/stillness and suggest cuts?
+- Undo/redo for cut operations
+
 ### Trim & Crop in Preview
 - Preview shows GIF frames (quarter resolution) — trimming works
 - Cropping on native MP4: add visual crop overlay on full-res preview
