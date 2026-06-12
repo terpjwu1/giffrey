@@ -80,4 +80,13 @@ contextBridge.exposeInMainWorld('giffrey', {
   getDisplayCaptureInfo: async () => {
     return ipcRenderer.invoke('display:get-capture-info');
   },
+  isNativeCaptureAvailable: async () => {
+    return ipcRenderer.invoke('sck-capture:available');
+  },
+  startNativeCapture: async (options) => {
+    return ipcRenderer.invoke('sck-capture:start', options);
+  },
+  stopNativeCapture: async () => {
+    return ipcRenderer.invoke('sck-capture:stop');
+  },
 });

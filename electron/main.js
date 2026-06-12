@@ -188,7 +188,16 @@ function isRecordingTempFilePath(tempFilePath) {
   if (!tempFilePath) return false;
   const resolvedPath = path.resolve(tempFilePath);
   const recordingsDir = getRecordingsDir();
-  return resolvedPath === tempFilePath && resolvedPath.startsWith(recordingsDir + path.sep) && path.basename(resolvedPath) === 'capture.webm';
+  const isWebmPath = resolvedPath === tempFilePath && resolvedPath.startsWith(recordingsDir + path.sep) && path.basename(resolvedPath) === 'capture.webm';
+  const tmpDir = path.resolve(os.tmpdir());
+  const sckParentDir = path.dirname(resolvedPath);
+  const sckParentName = path.basename(sckParentDir);
+  const isSckPath = resolvedPath === tempFilePath
+    && path.dirname(sckParentDir) === tmpDir
+    && sckParentName.startsWith('giffrey-sck-')
+    && sckParentName.length > 'giffrey-sck-'.length
+    && path.basename(resolvedPath) === 'capture.mp4';
+  return isWebmPath || isSckPath;
 }
 
 function abortRecordingReplace(tempFilePath) {
@@ -471,6 +480,120 @@ ipcMain.handle('mp4-export:cancel', async () => {
   return { ok: true, cancelled: hadActiveJob };
 });
 
+// --- ScreenCaptureKit native capture ---
+
+const { spawn } = require('child_process');
+let sckProcess = null;
+
+function resolveSckHelperPath() {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'native', 'giffrey-sck-capture');
+  }
+  return path.join(__dirname, '..', 'native', '.build', 'release', 'giffrey-sck-capture');
+}
+
+ipcMain.handle('sck-capture:available', async () => {
+  const helperPath = resolveSckHelperPath();
+  return { available: process.platform === 'darwin' && fs.existsSync(helperPath) };
+});
+
+ipcMain.handle('sck-capture:start', async (_event, { fps, includeAudio, includeMic }) => {
+  if (sckProcess) {
+    return { ok: false, error: 'Capture already in progress' };
+  }
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'giffrey-sck-'));
+  const outputPath = path.join(tempDir, 'capture.mp4');
+  const helperPath = resolveSckHelperPath();
+
+  if (!fs.existsSync(helperPath)) {
+    return { ok: false, error: 'Native capture helper not found' };
+  }
+
+  const args = ['--output', outputPath, '--fps', String(fps || 15), '--display', '0'];
+  if (includeAudio) args.push('--audio');
+  if (includeMic) args.push('--mic');
+
+  return new Promise((resolve) => {
+    sckProcess = spawn(helperPath, args);
+    sckProcess._tempDir = tempDir;
+    sckProcess._outputPath = outputPath;
+
+    let stderrBuf = '';
+    sckProcess.stderr.on('data', (data) => {
+      stderrBuf += data.toString();
+      const lines = stderrBuf.split('\n');
+      stderrBuf = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const msg = JSON.parse(line);
+          if (msg.status === 'recording') {
+            resolve({ ok: true, width: msg.width, height: msg.height, outputPath });
+          } else if (msg.status === 'error') {
+            sckProcess = null;
+            resolve({ ok: false, error: msg.message });
+          }
+        } catch {}
+      }
+    });
+
+    sckProcess.on('error', (err) => {
+      sckProcess = null;
+      resolve({ ok: false, error: err.message });
+    });
+
+    sckProcess.on('close', (code) => {
+      if (code !== 0 && sckProcess) {
+        sckProcess = null;
+        resolve({ ok: false, error: `Helper exited with code ${code}` });
+      }
+    });
+  });
+});
+
+ipcMain.handle('sck-capture:stop', async () => {
+  if (!sckProcess) return { ok: false, error: 'No capture in progress' };
+
+  const proc = sckProcess;
+  const outputPath = proc._outputPath;
+
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      proc.kill('SIGKILL');
+      sckProcess = null;
+      resolve({ ok: false, error: 'Shutdown timed out' });
+    }, 10000);
+
+    let stderrBuf = '';
+    proc.stderr.on('data', (data) => {
+      stderrBuf += data.toString();
+      const lines = stderrBuf.split('\n');
+      stderrBuf = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const msg = JSON.parse(line);
+          if (msg.status === 'done') {
+            clearTimeout(timeout);
+            sckProcess = null;
+            resolve({ ok: true, outputPath, duration: msg.duration });
+          } else if (msg.status === 'error') {
+            clearTimeout(timeout);
+            sckProcess = null;
+            resolve({ ok: false, error: msg.message });
+          }
+        } catch {}
+      }
+    });
+
+    proc.kill('SIGTERM');
+  });
+});
+
 app.on('window-all-closed', () => {
+  if (sckProcess) {
+    sckProcess.kill('SIGTERM');
+  }
   app.quit();
 });

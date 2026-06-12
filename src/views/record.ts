@@ -13,6 +13,9 @@ interface RecordViewAttrs {
   readonly micStream: MediaStream | null;
 }
 
+const MAX_GIF_FRAMES = 600;
+const GIF_SCALE = 0.25;
+
 export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
   private readonly app: App;
   private readonly captureStream: MediaStream;
@@ -26,6 +29,10 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
   private hasAudio: boolean = false;
   private videoRecorder: VideoRecording | undefined;
   private recordingStream: MediaStream | undefined;
+  private useNativeCapture = false;
+  private nativeCaptureOutputPath: string | null = null;
+  private micRecorder: MediaRecorder | null = null;
+  private micChunks: Blob[] = [];
   private _onbeforeremove: Function | undefined;
 
   constructor(vnode: m.CVnode<RecordViewAttrs>) {
@@ -44,6 +51,22 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
     video.srcObject = combinedStream;
     this.displayCaptureInfo = await getDisplayCaptureInfo();
 
+    // Check if native ScreenCaptureKit capture is available
+    const giffrey = (window as any).giffrey;
+    if (giffrey?.isNativeCaptureAvailable) {
+      const { available } = await giffrey.isNativeCaptureAvailable();
+      if (available) {
+        const hasMic = !!(this.micStream && this.micStream.getAudioTracks().length > 0);
+        const result = await giffrey.startNativeCapture({ fps: 15, includeAudio: !hasMic, includeMic: hasMic });
+        if (result.ok) {
+          this.useNativeCapture = true;
+          this.nativeCaptureOutputPath = result.outputPath;
+          this.width = result.width;
+          this.height = result.height;
+        }
+      }
+    }
+
     const ctx = canvas.getContext("2d", { willReadFrequently: true }) as CanvasRenderingContext2D;
 
     const worker = new Worker("/workers/ticker.js");
@@ -56,24 +79,43 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
       const first = this.startTime === 0;
 
       if (first) {
-        const track = this.captureStream.getVideoTracks()[0];
-        const settings = track?.getSettings();
-        const sourceWidth = settings?.width || video.videoWidth;
-        const sourceHeight = settings?.height || video.videoHeight;
-        const dimensions = calculateCaptureDimensions(sourceWidth, sourceHeight, this.displayCaptureInfo);
-
         this.startTime = Date.now();
-        this.width = dimensions.outputWidth;
-        this.height = dimensions.outputHeight;
-        canvas.width = dimensions.outputWidth;
-        canvas.height = dimensions.outputHeight;
 
-        // Electron 30/Chromium returns desktopCapturer getDisplayMedia streams in logical pixels on macOS Retina.
-        // There is no supported Electron API or constraint to force physical-pixel capture, so preserve the
-        // physical output dimensions by scaling the logical stream onto a device-pixel-sized canvas.
-        ctx.imageSmoothingEnabled = !dimensions.upscaled;
+        if (this.useNativeCapture) {
+          // GIF preview frames at quarter logical resolution
+          const gifWidth = Math.round(video.videoWidth * GIF_SCALE);
+          const gifHeight = Math.round(video.videoHeight * GIF_SCALE);
+          canvas.width = gifWidth;
+          canvas.height = gifHeight;
+        } else {
+          // Fallback: canvas upscaling path
+          const track = this.captureStream.getVideoTracks()[0];
+          const settings = track?.getSettings();
+          const sourceWidth = settings?.width || video.videoWidth;
+          const sourceHeight = settings?.height || video.videoHeight;
+          const dimensions = calculateCaptureDimensions(sourceWidth, sourceHeight, this.displayCaptureInfo);
+
+          this.width = dimensions.outputWidth;
+          this.height = dimensions.outputHeight;
+          canvas.width = dimensions.outputWidth;
+          canvas.height = dimensions.outputHeight;
+          ctx.imageSmoothingEnabled = !dimensions.upscaled;
+        }
       }
 
+      // For native capture: only capture GIF frames (bounded)
+      if (this.useNativeCapture) {
+        if (this.frames.length >= MAX_GIF_FRAMES) return;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        this.frames.push({
+          imageData,
+          timestamp: first ? 0 : Date.now() - this.startTime,
+        });
+        return;
+      }
+
+      // Fallback path: canvas upscaling + MediaRecorder
       if (!this.videoRecorder) {
         const canvasStream = canvas.captureStream(Math.max(1, Math.round(1000 / this.app.frameLength)));
         const { stream: recordingStream, hasAudio: recordingHasAudio } = buildCanvasRecordingStream(canvasStream, this.micStream);
@@ -134,20 +176,47 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
   }
 
   private async stopRecording(): Promise<void> {
-    if (this.videoRecorder) {
-      await this.videoRecorder.stop();
+    let videoBlob: Blob | null = null;
+    let tempFilePath: string | undefined;
+
+    if (this.useNativeCapture) {
+      const giffrey = (window as any).giffrey;
+      const result = await giffrey.stopNativeCapture();
+      if (result.ok) {
+        tempFilePath = this.nativeCaptureOutputPath || undefined;
+      }
+      // Stop mic recorder
+      if (this.micRecorder && this.micRecorder.state !== 'inactive') {
+        await new Promise<void>((resolve) => {
+          this.micRecorder!.onstop = () => resolve();
+          this.micRecorder!.stop();
+        });
+      }
+    } else {
+      if (this.videoRecorder) {
+        await this.videoRecorder.stop();
+      }
+      videoBlob = this.videoRecorder ? this.videoRecorder.getBlob() : null;
+      tempFilePath = this.videoRecorder?.getTempFilePath() ?? undefined;
     }
-    const videoBlob = this.videoRecorder ? this.videoRecorder.getBlob() : null;
+
     const durationMs = this.frames.length > 0
       ? this.frames[this.frames.length - 1].timestamp
       : 0;
-    console.log('[giffrey] stopRecording:', { videoBlob: videoBlob?.size, frames: this.frames.length, hasAudio: this.hasAudio, durationMs });
+    console.log('[giffrey] stopRecording:', {
+      native: this.useNativeCapture,
+      videoBlob: videoBlob?.size,
+      frames: this.frames.length,
+      hasAudio: this.hasAudio,
+      durationMs,
+      tempFilePath,
+    });
     this.app.stopRecording({
       width: this.width,
       height: this.height,
       frames: this.frames,
       videoBlob,
-      tempFilePath: this.videoRecorder?.getTempFilePath() ?? undefined,
+      tempFilePath,
       hasAudio: this.hasAudio,
       durationMs,
     });
