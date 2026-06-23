@@ -42,7 +42,7 @@ npm start
 │  ScreenCaptureKit ──→ VideoToolbox H.264 ──→ MP4 file       │
 │  (3456x2234 native)   (hardware encoded)    (temp)          │
 │                                                              │
-│  + Microphone ──→ AAC (44.1kHz) ──→ same MP4                │
+│  + Microphone ──→ AAC (48kHz) ──→ same MP4                   │
 ├─────────────────────────────────────────────────────────────┤
 │  Preview & Edit                                              │
 │                                                              │
@@ -51,7 +51,8 @@ npm start
 │  Export                                                      │
 │                                                              │
 │  No edits:  FFmpeg -c copy (instant, zero quality loss)     │
-│  With edits: FFmpeg CRF 18 + audio copy                     │
+│  With trim:  FFmpeg CRF 18 video + AAC 128k audio           │
+│  With crop:  FFmpeg CRF 18 video + audio copy               │
 │  GIF: WebAssembly encoder (libimagequant)                   │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -63,7 +64,7 @@ npm start
 | Video resolution | Physical display pixels (e.g., 3456x2234) |
 | Video codec | H.264 High Profile (VideoToolbox hardware) |
 | Video bitrate | ~8 Mbps (AVAssetWriter target) |
-| Audio codec | AAC at mic's native sample rate |
+| Audio codec | AAC 48kHz mono (128 kbps) |
 | Export quality | CRF 18 (near visually lossless) |
 | FPS | 15 (configurable) |
 
