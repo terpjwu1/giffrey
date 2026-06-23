@@ -219,6 +219,7 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
       tempFilePath,
       hasAudio: this.hasAudio,
       durationMs,
+      isNativeCapture: this.useNativeCapture,
     });
   }
 }

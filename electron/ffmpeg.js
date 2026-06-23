@@ -57,12 +57,16 @@ function buildFFmpegArgs(options) {
 
   const args = ['-y', '-i', inputPath];
 
-  const needsTrim = trim.endMs > 0;
-
-  if (needsTrim) {
+  const validTrim = !(trim.startMs > 0 && trim.endMs > 0 && trim.startMs >= trim.endMs);
+  if (validTrim && trim.startMs > 0) {
     args.push('-ss', (trim.startMs / 1000).toString());
-    args.push('-to', (trim.endMs / 1000).toString());
   }
+  if (validTrim && trim.endMs > 0 && trim.startMs > 0) {
+    args.push('-t', ((trim.endMs - trim.startMs) / 1000).toString());
+  } else if (validTrim && trim.endMs > 0) {
+    args.push('-t', (trim.endMs / 1000).toString());
+  }
+  const needsTrim = validTrim && (trim.startMs > 0 || trim.endMs > 0);
 
   const isFullCrop = cropX === 0 && cropY === 0;
   const needsCrop = !isFullCrop;
@@ -86,16 +90,10 @@ function buildFFmpegArgs(options) {
   );
 
   if (hasAudio) {
-    if (isNativeCapture) {
-      // Q1: Yes, FFmpeg can re-encode the video stream while stream-copying AAC into MP4; timestamps are remuxed so normal crop/trim cases stay in sync.
-      // Q4: AAC copy can land near packet/frame boundaries during trims, so normalize output timestamps to avoid negative-start sync artifacts.
-      // Q5: Copying native AAC is the right local fix; emitting PCM from Swift would move the single encode to FFmpeg but increases capture size and requires helper changes.
+    if (isNativeCapture && !needsTrim) {
       args.push('-c:a', 'copy');
-      if (needsTrim) {
-        args.push('-avoid_negative_ts', 'make_zero');
-      }
     } else {
-      args.push('-c:a', 'aac');
+      args.push('-c:a', 'aac', '-b:a', '128k');
     }
   } else {
     args.push('-an');

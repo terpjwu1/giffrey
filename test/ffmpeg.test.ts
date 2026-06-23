@@ -70,15 +70,15 @@ describe('buildFFmpegArgs', () => {
       hasAudio: true,
     });
 
-    // -i must come before -ss/-to for reliable trimming of MediaRecorder WebM
+    // -i must come before -ss/-t for reliable trimming
     const iIdx = args.indexOf('-i');
     const ssIdx = args.indexOf('-ss');
-    const toIdx = args.indexOf('-to');
+    const tIdx = args.indexOf('-t');
     expect(iIdx).toBeLessThan(ssIdx);
-    expect(iIdx).toBeLessThan(toIdx);
+    expect(iIdx).toBeLessThan(tIdx);
 
     expect(args).toContain('5');
-    expect(args).toContain('20');
+    expect(args).toContain('15'); // -t duration = (20000 - 5000) / 1000 = 15
     expect(args).toContain('crop=640:480:100:50');
     expect(args).toContain('-c:v');
     expect(args).toContain('libx264');

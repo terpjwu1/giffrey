@@ -11,6 +11,7 @@ export interface Recording {
   readonly tempFilePath?: string;
   readonly hasAudio: boolean;
   readonly durationMs: number;
+  readonly isNativeCapture?: boolean;
 }
 
 export interface Rect {

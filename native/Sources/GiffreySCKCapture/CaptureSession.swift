@@ -61,9 +61,9 @@ class CaptureSession: NSObject, SCStreamOutput, AVCaptureAudioDataOutputSampleBu
             try await scStream.startCapture()
             self.stream = scStream
 
-            // Set up microphone capture if requested
-            if args.captureMic {
-                setupMicCapture()
+            // Start mic capture after SCStream is running
+            if args.captureMic && micInput != nil {
+                startMicSession()
             }
 
             writeStatus([
@@ -123,10 +123,10 @@ class CaptureSession: NSObject, SCStreamOutput, AVCaptureAudioDataOutputSampleBu
         }
 
         if includeMic {
-            // Use 44100 Hz — AAC encoder resamples from mic's native rate (e.g., 24kHz AirPods)
+            // Use 48kHz for AAC output — AVAssetWriter resamples from mic's native rate
             let micSettings: [String: Any] = [
                 AVFormatIDKey: kAudioFormatMPEG4AAC,
-                AVSampleRateKey: 44100,
+                AVSampleRateKey: 48000,
                 AVNumberOfChannelsKey: 1,
                 AVEncoderBitRateKey: 128_000,
             ]
@@ -208,7 +208,15 @@ class CaptureSession: NSObject, SCStreamOutput, AVCaptureAudioDataOutputSampleBu
 
     // MARK: - Mic Capture
 
-    private func setupMicCapture() {
+    private func getMicSampleRate() -> Double {
+        guard let device = AVCaptureDevice.default(for: .audio) else { return 48000 }
+        if let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(device.activeFormat.formatDescription) {
+            return asbd.pointee.mSampleRate
+        }
+        return 48000
+    }
+
+    private func startMicSession() {
         guard let device = AVCaptureDevice.default(for: .audio) else { return }
         let session = AVCaptureSession()
         guard let deviceInput = try? AVCaptureDeviceInput(device: device) else { return }

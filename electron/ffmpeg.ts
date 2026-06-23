@@ -74,9 +74,14 @@ export function buildFFmpegArgs(options: FFmpegExportOptions): string[] {
 
   const args: string[] = ['-y', '-i', inputPath];
 
-  if (trim.endMs > 0) {
+  const validTrim = !(trim.startMs > 0 && trim.endMs > 0 && trim.startMs >= trim.endMs);
+  if (validTrim && trim.startMs > 0) {
     args.push('-ss', (trim.startMs / 1000).toString());
-    args.push('-to', (trim.endMs / 1000).toString());
+  }
+  if (validTrim && trim.endMs > 0 && trim.startMs > 0) {
+    args.push('-t', ((trim.endMs - trim.startMs) / 1000).toString());
+  } else if (validTrim && trim.endMs > 0) {
+    args.push('-t', (trim.endMs / 1000).toString());
   }
 
   args.push(
@@ -88,7 +93,7 @@ export function buildFFmpegArgs(options: FFmpegExportOptions): string[] {
   );
 
   if (hasAudio) {
-    args.push('-c:a', 'aac');
+    args.push('-c:a', 'aac', '-b:a', '128k');
   } else {
     args.push('-an');
   }

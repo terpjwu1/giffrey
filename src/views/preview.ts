@@ -566,11 +566,13 @@ export default class PreviewView implements m.ClassComponent<PreviewViewAttrs> {
     }
 
     try {
-      // Always export the full WebM — frame-based trim doesn't reliably map to
-      // MediaRecorder timestamps (frame ticker drops frames under load).
-      // endMs=-1 tells ffmpeg to skip -ss/-to and process the entire file.
-      const trimStartMs = 0;
-      const trimEndMs = -1;
+      // WebM (MediaRecorder): full export — frame timestamps unreliable.
+      // Native MP4 (ScreenCaptureKit): use actual trim handle positions.
+      const trimStartMs = this.recording.isNativeCapture ? this.trim.start : 0;
+      const isFullDuration = this.trim.end >= this.duration - 100;
+      const trimEndMs = this.recording.isNativeCapture
+        ? (isFullDuration ? -1 : this.trim.end)
+        : -1;
 
       const now = new Date();
       const pad = (n: number, d: number) => String(n).padStart(d, "0");
