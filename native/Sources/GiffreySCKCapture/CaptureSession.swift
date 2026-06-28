@@ -3,8 +3,9 @@ import ScreenCaptureKit
 import AVFoundation
 import CoreMedia
 import VideoToolbox
+import CoreImage
 
-class CaptureSession: NSObject, SCStreamOutput, AVCaptureAudioDataOutputSampleBufferDelegate {
+class CaptureSession: NSObject, SCStreamOutput, AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudioDataOutputSampleBufferDelegate {
     let serialQueue = DispatchQueue(label: "com.giffrey.capture")
     private let args: Args
     private var stream: SCStream?
@@ -14,6 +15,13 @@ class CaptureSession: NSObject, SCStreamOutput, AVCaptureAudioDataOutputSampleBu
     private var audioInput: AVAssetWriterInput?
     private var micSession: AVCaptureSession?
     private var micInput: AVAssetWriterInput?
+    private var cameraSession: AVCaptureSession?
+    private var cameraVideoOutput: AVCaptureVideoDataOutput?
+    private var latestCameraSampleBuffer: CMSampleBuffer?
+    private var latestCameraBuffer: CVPixelBuffer?
+    private var ciContext: CIContext?
+    private var cameraPosition: CGPoint = .zero
+    private var cameraDiameter: Int = 300
     private var isShuttingDown = false
     private var startTime: CMTime?
     private var sessionStarted = false
@@ -64,6 +72,17 @@ class CaptureSession: NSObject, SCStreamOutput, AVCaptureAudioDataOutputSampleBu
             // Start mic capture after SCStream is running
             if args.captureMic && micInput != nil {
                 startMicSession()
+            }
+
+            // Start camera capture for face bubble
+            if args.enableCamera {
+                ciContext = CIContext(options: [.useSoftwareRenderer: false])
+                cameraPosition = CGPoint(
+                    x: CGFloat(args.cameraX) * CGFloat(physicalWidth),
+                    y: CGFloat(args.cameraY) * CGFloat(physicalHeight)
+                )
+                cameraDiameter = args.cameraSize
+                setupCameraCapture()
             }
 
             writeStatus([
@@ -160,7 +179,13 @@ class CaptureSession: NSObject, SCStreamOutput, AVCaptureAudioDataOutputSampleBu
 
             let relativePTS = CMTimeSubtract(pts, startTime!)
             guard let input = videoInput, input.isReadyForMoreMediaData else { return }
-            pixelBufferAdaptor?.append(pixelBuffer, withPresentationTime: relativePTS)
+
+            if let cameraBuffer = latestCameraBuffer, let ctx = ciContext {
+                let composited = compositeFrame(screenBuffer: pixelBuffer, cameraBuffer: cameraBuffer, context: ctx)
+                pixelBufferAdaptor?.append(composited, withPresentationTime: relativePTS)
+            } else {
+                pixelBufferAdaptor?.append(pixelBuffer, withPresentationTime: relativePTS)
+            }
 
         case .audio:
             guard sessionStarted else { return }
@@ -193,10 +218,19 @@ class CaptureSession: NSObject, SCStreamOutput, AVCaptureAudioDataOutputSampleBu
         return newBuffer
     }
 
-    // MARK: - AVCaptureAudioDataOutputSampleBufferDelegate
+    // MARK: - AVCapture Delegate (camera + mic routing)
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        guard !isShuttingDown, sessionStarted else { return }
+        guard !isShuttingDown else { return }
+
+        if output === cameraVideoOutput {
+            latestCameraSampleBuffer = sampleBuffer
+            latestCameraBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
+            return
+        }
+
+        // Mic audio
+        guard sessionStarted else { return }
         guard let input = micInput, input.isReadyForMoreMediaData else { return }
         let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         let relativePTS = CMTimeSubtract(pts, startTime!)
@@ -204,6 +238,107 @@ class CaptureSession: NSObject, SCStreamOutput, AVCaptureAudioDataOutputSampleBu
         if let adjusted = adjustTimestamp(sampleBuffer, to: relativePTS) {
             input.append(adjusted)
         }
+    }
+
+    // MARK: - Camera Capture
+
+    private func setupCameraCapture() {
+        let cameraAuth = AVCaptureDevice.authorizationStatus(for: .video)
+        if cameraAuth == .authorized {
+            startCameraSession()
+        } else if cameraAuth == .notDetermined {
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                if granted { self.serialQueue.async { self.startCameraSession() } }
+            }
+        }
+    }
+
+    private func startCameraSession() {
+        let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front)
+            ?? AVCaptureDevice.default(for: .video)
+        guard let device else { return }
+        let session = AVCaptureSession()
+        session.sessionPreset = .medium
+        guard let input = try? AVCaptureDeviceInput(device: device) else { return }
+        session.addInput(input)
+
+        let output = AVCaptureVideoDataOutput()
+        output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+        output.setSampleBufferDelegate(self, queue: serialQueue)
+        output.alwaysDiscardsLateVideoFrames = true
+        session.addOutput(output)
+        self.cameraVideoOutput = output
+
+        session.startRunning()
+        self.cameraSession = session
+    }
+
+    // MARK: - Compositing
+
+    private func compositeFrame(screenBuffer: CVPixelBuffer, cameraBuffer: CVPixelBuffer, context: CIContext) -> CVPixelBuffer {
+        let screenImage = CIImage(cvPixelBuffer: screenBuffer)
+        var cameraImage = CIImage(cvPixelBuffer: cameraBuffer)
+        let originalExtent = cameraImage.extent
+
+        // Mirror front camera — normalize back to origin after
+        cameraImage = cameraImage
+            .transformed(by: CGAffineTransform(scaleX: -1, y: 1))
+            .transformed(by: CGAffineTransform(translationX: originalExtent.width, y: 0))
+
+        // Center-crop to square — use extent-based coordinates
+        let extent = cameraImage.extent
+        let minDim = min(extent.width, extent.height)
+        let cropRect = CGRect(
+            x: extent.midX - minDim / 2,
+            y: extent.midY - minDim / 2,
+            width: minDim,
+            height: minDim
+        )
+        cameraImage = cameraImage
+            .cropped(to: cropRect)
+            .transformed(by: CGAffineTransform(translationX: -cropRect.minX, y: -cropRect.minY))
+
+        // Scale to target diameter — clip to exact size
+        let scale = CGFloat(cameraDiameter) / minDim
+        let bubbleSize = CGFloat(cameraDiameter)
+        cameraImage = cameraImage
+            .transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+            .cropped(to: CGRect(x: 0, y: 0, width: bubbleSize, height: bubbleSize))
+
+        // Circular mask — aligned to origin-normalized extent
+        let radius = bubbleSize / 2
+        let maskExtent = CGRect(x: 0, y: 0, width: bubbleSize, height: bubbleSize)
+        let mask = CIFilter(name: "CIRadialGradient", parameters: [
+            "inputCenter": CIVector(x: radius, y: radius),
+            "inputRadius0": radius as NSNumber,
+            "inputRadius1": (radius + 0.5) as NSNumber,
+            "inputColor0": CIColor.white,
+            "inputColor1": CIColor.clear,
+        ])!.outputImage!.cropped(to: maskExtent)
+
+        // Apply mask with transparent background
+        let transparentBg = CIImage.empty().cropped(to: maskExtent)
+        let maskedCamera = cameraImage.applyingFilter("CIBlendWithMask", parameters: [
+            kCIInputBackgroundImageKey: transparentBg,
+            kCIInputMaskImageKey: mask,
+        ])
+
+        // Position (Y-axis inverted: Core Image is bottom-left origin)
+        let screenHeight = screenImage.extent.height
+        let ciX = cameraPosition.x - radius
+        let ciY = screenHeight - cameraPosition.y - radius
+        let positioned = maskedCamera.transformed(by: CGAffineTransform(translationX: ciX, y: ciY))
+
+        // Composite over screen
+        let final = positioned.composited(over: screenImage)
+
+        // Render to separate output buffer from pool
+        guard let pool = pixelBufferAdaptor?.pixelBufferPool else { return screenBuffer }
+        var outputBuffer: CVPixelBuffer?
+        CVPixelBufferPoolCreatePixelBuffer(nil, pool, &outputBuffer)
+        guard let outputBuffer else { return screenBuffer }
+        context.render(final, to: outputBuffer)
+        return outputBuffer
     }
 
     // MARK: - Mic Capture
@@ -242,6 +377,7 @@ class CaptureSession: NSObject, SCStreamOutput, AVCaptureAudioDataOutputSampleBu
             } ?? 0
 
             micSession?.stopRunning()
+            cameraSession?.stopRunning()
 
             stream?.stopCapture { [self] _ in
                 serialQueue.async { [self] in
