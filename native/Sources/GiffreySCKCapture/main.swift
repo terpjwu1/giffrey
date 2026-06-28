@@ -10,6 +10,10 @@ struct Args {
     let displayID: Int
     let captureAudio: Bool
     let captureMic: Bool
+    let enableCamera: Bool
+    let cameraX: Float
+    let cameraY: Float
+    let cameraSize: Int
 }
 
 func parseArgs() -> Args {
@@ -18,6 +22,10 @@ func parseArgs() -> Args {
     var displayID = 0
     var audio = false
     var mic = false
+    var camera = false
+    var cameraX: Float = 0.85
+    var cameraY: Float = 0.80
+    var cameraSize = 300
     let args = CommandLine.arguments
     var i = 1
     while i < args.count {
@@ -27,11 +35,15 @@ func parseArgs() -> Args {
         case "--display": i += 1; displayID = Int(args[i]) ?? 0
         case "--audio": audio = true
         case "--mic": mic = true
+        case "--camera": camera = true
+        case "--camera-x": i += 1; cameraX = Float(args[i]) ?? 0.85
+        case "--camera-y": i += 1; cameraY = Float(args[i]) ?? 0.80
+        case "--camera-size": i += 1; cameraSize = Int(args[i]) ?? 300
         default: break
         }
         i += 1
     }
-    return Args(outputPath: output, fps: fps, displayID: displayID, captureAudio: audio, captureMic: mic)
+    return Args(outputPath: output, fps: fps, displayID: displayID, captureAudio: audio, captureMic: mic, enableCamera: camera, cameraX: cameraX, cameraY: cameraY, cameraSize: cameraSize)
 }
 
 func writeStatus(_ dict: [String: Any]) {
