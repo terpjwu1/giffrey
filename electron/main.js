@@ -497,7 +497,7 @@ ipcMain.handle('sck-capture:available', async () => {
   return { available: process.platform === 'darwin' && fs.existsSync(helperPath) };
 });
 
-ipcMain.handle('sck-capture:start', async (_event, { fps, includeAudio, includeMic, enableCamera, cameraX, cameraY, cameraSize }) => {
+ipcMain.handle('sck-capture:start', async (_event, { fps, includeAudio, includeMic }) => {
   if (sckProcess) {
     return { ok: false, error: 'Capture already in progress' };
   }
@@ -513,12 +513,6 @@ ipcMain.handle('sck-capture:start', async (_event, { fps, includeAudio, includeM
   const args = ['--output', outputPath, '--fps', String(fps || 15), '--display', '0'];
   if (includeAudio) args.push('--audio');
   if (includeMic) args.push('--mic');
-  if (enableCamera) {
-    args.push('--camera');
-    if (cameraX != null) args.push('--camera-x', String(cameraX));
-    if (cameraY != null) args.push('--camera-y', String(cameraY));
-    if (cameraSize != null) args.push('--camera-size', String(cameraSize));
-  }
 
   return new Promise((resolve) => {
     sckProcess = spawn(helperPath, args);

@@ -41,10 +41,6 @@ export interface Gif {
 export interface App {
   readonly frameLength: number;
   micEnabled: boolean;
-  cameraEnabled?: boolean;
-  cameraX?: number;
-  cameraY?: number;
-  cameraSize?: number;
   startRecording(): void;
   stopRecording(recording: Recording): void;
   startRendering(renderOptions: RenderOptions): void;

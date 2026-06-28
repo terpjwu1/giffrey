@@ -57,15 +57,7 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
       const { available } = await giffrey.isNativeCaptureAvailable();
       if (available) {
         const hasMic = !!(this.micStream && this.micStream.getAudioTracks().length > 0);
-        const result = await giffrey.startNativeCapture({
-          fps: 15,
-          includeAudio: !hasMic,
-          includeMic: hasMic,
-          enableCamera: this.app.cameraEnabled || false,
-          cameraX: this.app.cameraX ?? 0.85,
-          cameraY: this.app.cameraY ?? 0.80,
-          cameraSize: this.app.cameraSize ?? 300,
-        });
+        const result = await giffrey.startNativeCapture({ fps: 15, includeAudio: !hasMic, includeMic: hasMic });
         if (result.ok) {
           this.useNativeCapture = true;
           this.nativeCaptureOutputPath = result.outputPath;
