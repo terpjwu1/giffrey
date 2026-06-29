@@ -15,6 +15,8 @@ interface RecordViewAttrs {
 
 const MAX_GIF_FRAMES = 600;
 const GIF_SCALE = 0.25;
+const CAPTURE_READY_TIMEOUT_MS = 2000;
+const CAPTURE_PERMISSION_ERROR = "Screen capture permission may be missing — please restart the app after granting permission in System Settings.";
 
 export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
   private readonly app: App;
@@ -33,6 +35,9 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
   private nativeCaptureOutputPath: string | null = null;
   private micRecorder: MediaRecorder | null = null;
   private micChunks: Blob[] = [];
+  private videoMetadataLoaded = false;
+  private captureReadyStartedAt = 0;
+  private captureError: string | null = null;
   private _onbeforeremove: Function | undefined;
 
   constructor(vnode: m.CVnode<RecordViewAttrs>) {
@@ -48,14 +53,42 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
     const { stream: combinedStream, hasAudio } = buildCombinedStream(this.captureStream, this.micStream);
     this.hasAudio = hasAudio;
 
+    this.captureReadyStartedAt = Date.now();
+    video.onloadedmetadata = () => {
+      this.videoMetadataLoaded = true;
+      console.log('[giffrey] capture video metadata loaded:', {
+        videoWidth: video.videoWidth,
+        videoHeight: video.videoHeight,
+        readyState: video.readyState,
+        trackSettings: this.captureStream.getVideoTracks()[0]?.getSettings(),
+      });
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        this.captureError = CAPTURE_PERMISSION_ERROR;
+      } else {
+        this.captureError = null;
+      }
+      m.redraw();
+    };
+    video.onerror = () => {
+      console.error('[giffrey] capture video element failed to load:', video.error);
+      this.captureError = CAPTURE_PERMISSION_ERROR;
+      m.redraw();
+    };
     video.srcObject = combinedStream;
+    video.play().catch((err) => {
+      console.error('[giffrey] capture video play failed:', err);
+      this.captureError = CAPTURE_PERMISSION_ERROR;
+      m.redraw();
+    });
     this.displayCaptureInfo = await getDisplayCaptureInfo();
 
-    // Check if native ScreenCaptureKit capture is available
+    const ctx = canvas.getContext("2d", { willReadFrequently: true }) as CanvasRenderingContext2D;
+
+    // Start native capture in background — don't block worker/recording
     const giffrey = (window as any).giffrey;
     if (giffrey?.isNativeCaptureAvailable) {
-      const { available } = await giffrey.isNativeCaptureAvailable();
-      if (available) {
+      giffrey.isNativeCaptureAvailable().then(async ({ available }: { available: boolean }) => {
+        if (!available) return;
         const hasMic = !!(this.micStream && this.micStream.getAudioTracks().length > 0);
         const result = await giffrey.startNativeCapture({
           fps: 15,
@@ -72,18 +105,28 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
           this.width = result.width;
           this.height = result.height;
         }
-      }
+      }).catch(() => {});
     }
-
-    const ctx = canvas.getContext("2d", { willReadFrequently: true }) as CanvasRenderingContext2D;
 
     const worker = new Worker("/workers/ticker.js");
     worker.postMessage(this.app.frameLength);
     worker.onmessage = () => {
-      if (video.videoWidth === 0) {
+      if (!this.videoMetadataLoaded || video.videoWidth === 0 || video.videoHeight === 0) {
+        if (!this.captureError && Date.now() - this.captureReadyStartedAt > CAPTURE_READY_TIMEOUT_MS) {
+          console.error('[giffrey] capture video stayed zero-size after metadata wait:', {
+            metadataLoaded: this.videoMetadataLoaded,
+            videoWidth: video.videoWidth,
+            videoHeight: video.videoHeight,
+            readyState: video.readyState,
+            trackSettings: this.captureStream.getVideoTracks()[0]?.getSettings(),
+          });
+          this.captureError = CAPTURE_PERMISSION_ERROR;
+          m.redraw();
+        }
         return;
       }
 
+      this.captureError = null;
       const first = this.startTime === 0;
 
       if (first) {
@@ -154,6 +197,8 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
       track.removeEventListener("ended", endedListener);
       combinedStream.getTracks().forEach(t => t.stop());
       this.recordingStream?.getVideoTracks().forEach(t => t.stop());
+      video.onloadedmetadata = null;
+      video.onerror = null;
       video.srcObject = null;
     };
 
@@ -177,8 +222,22 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
           icon: "square-fill",
           onclick: () => this.stopRecording(),
         }),
+        this.captureError ? m("p.text-error", this.captureError) : null,
         m("canvas.hidden", { width: 640, height: 480 }),
-        m("video.hidden", { autoplay: true, playsinline: true, muted: true }),
+        m("video", {
+          autoplay: true,
+          playsinline: true,
+          muted: true,
+          style: {
+            position: "absolute",
+            left: "-9999px",
+            top: "0",
+            width: "1px",
+            height: "1px",
+            opacity: "0",
+            pointerEvents: "none",
+          },
+        }),
       ]),
     ];
   }

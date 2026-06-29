@@ -41,12 +41,32 @@ app.whenReady().then(() => {
   });
 
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+    console.log('[giffrey] display media request:', {
+      videoRequested: request.videoRequested,
+      audioRequested: request.audioRequested,
+      userGesture: request.userGesture,
+      securityOrigin: request.securityOrigin,
+    });
+
     desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
-      if (sources.length > 0) {
-        callback({ video: sources[0], audio: 'loopback' });
-      } else {
+      if (sources.length === 0) {
+        // After `tccutil reset ScreenCapture`, macOS may require a full app relaunch after granting Screen Recording again.
+        console.error('[giffrey] desktopCapturer.getSources returned no screens. Screen Recording permission may be missing; grant it in System Settings and restart Giffrey.');
         callback({});
+        return;
       }
+
+      const source = sources[0];
+      if (!source) {
+        console.error('[giffrey] failed to select a desktop capture source:', sources);
+        callback({});
+        return;
+      }
+
+      callback({ video: source, audio: 'loopback' });
+    }).catch((err) => {
+      console.error('[giffrey] desktopCapturer.getSources failed:', err);
+      callback({});
     });
   });
 
@@ -70,6 +90,7 @@ app.whenReady().then(() => {
   });
 
   mainWindow.loadURL('app://./index.html');
+  mainWindow.webContents.openDevTools({ mode: 'detach' });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -520,14 +541,24 @@ ipcMain.handle('sck-capture:start', async (_event, { fps, includeAudio, includeM
     if (cameraSize != null) args.push('--camera-size', String(cameraSize));
   }
 
+  console.log('[sck-capture] spawning:', helperPath, args.join(' '));
+
   return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      console.error('[sck-capture] start timed out after 5s');
+      if (sckProcess) { sckProcess.kill(); sckProcess = null; }
+      resolve({ ok: false, error: 'Native capture start timed out' });
+    }, 5000);
+
     sckProcess = spawn(helperPath, args);
     sckProcess._tempDir = tempDir;
     sckProcess._outputPath = outputPath;
 
     let stderrBuf = '';
     sckProcess.stderr.on('data', (data) => {
-      stderrBuf += data.toString();
+      const text = data.toString();
+      console.log('[sck-capture] stderr:', text.trim());
+      stderrBuf += text;
       const lines = stderrBuf.split('\n');
       stderrBuf = lines.pop() || '';
       for (const line of lines) {
@@ -535,8 +566,10 @@ ipcMain.handle('sck-capture:start', async (_event, { fps, includeAudio, includeM
         try {
           const msg = JSON.parse(line);
           if (msg.status === 'recording') {
+            clearTimeout(timeout);
             resolve({ ok: true, width: msg.width, height: msg.height, outputPath });
           } else if (msg.status === 'error') {
+            clearTimeout(timeout);
             sckProcess = null;
             resolve({ ok: false, error: msg.message });
           }
@@ -545,11 +578,13 @@ ipcMain.handle('sck-capture:start', async (_event, { fps, includeAudio, includeM
     });
 
     sckProcess.on('error', (err) => {
+      clearTimeout(timeout);
       sckProcess = null;
       resolve({ ok: false, error: err.message });
     });
 
     sckProcess.on('close', (code) => {
+      clearTimeout(timeout);
       if (code !== 0 && sckProcess) {
         sckProcess = null;
         resolve({ ok: false, error: `Helper exited with code ${code}` });

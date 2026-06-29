@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Giffrey — Face Bubble UI Prototype</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+h1 { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: #fff; }
+.subtitle { font-size: 13px; color: #888; margin-bottom: 24px; }
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  max-width: 800px;
+}
+
+.screen-preview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  background: #2a2a3e;
+  border-radius: 12px;
+  border: 2px solid #3a3a5e;
+  overflow: hidden;
+  cursor: default;
+}
+.screen-preview::before {
+  content: 'Screen Preview';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 14px;
+  color: #555;
+  pointer-events: none;
+}
+
+.face-bubble {
+  position: absolute;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  cursor: grab;
+  transition: box-shadow 0.15s;
+  z-index: 10;
+}
+.face-bubble:active { cursor: grabbing; box-shadow: 0 6px 30px rgba(0, 0, 0, 0.7); }
+.face-bubble.disabled {
+  opacity: 0.3;
+  pointer-events: none;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.face-bubble video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+.face-bubble .no-camera {
+  width: 100%;
+  height: 100%;
+  background: #3a3a5e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+label {
+  font-size: 13px;
+  color: #bbb;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #6c63ff;
+}
+
+.btn-record {
+  background: #e53935;
+  color: #fff;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-record:hover { background: #c62828; }
+.btn-record::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.coords {
+  font-family: 'SF Mono', Monaco, 'Fira Code', monospace;
+  font-size: 12px;
+  color: #6c63ff;
+  background: #2a2a3e;
+  padding: 4px 10px;
+  border-radius: 6px;
+  min-width: 140px;
+  text-align: center;
+}
+
+.size-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.size-control input[type="range"] {
+  width: 80px;
+  accent-color: #6c63ff;
+}
+.size-control span {
+  font-family: monospace;
+  font-size: 12px;
+  color: #888;
+  min-width: 36px;
+}
+
+.output-section {
+  background: #2a2a3e;
+  border-radius: 8px;
+  padding: 14px 18px;
+  position: relative;
+}
+.output-section .label {
+  font-size: 11px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+.output-section pre {
+  font-family: 'SF Mono', Monaco, monospace;
+  font-size: 12px;
+  color: #ccc;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+.copy-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: #3a3a5e;
+  border: none;
+  color: #aaa;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.copy-btn:hover { background: #4a4a6e; color: #fff; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div>
+    <h1>Giffrey — Recording Setup</h1>
+    <div class="subtitle">Position your face bubble, enable mic, then hit Record.</div>
+  </div>
+
+  <div class="screen-preview" id="screenPreview">
+    <div class="face-bubble" id="faceBubble">
+      <video id="cameraVideo" autoplay playsinline muted></video>
+      <div class="no-camera" id="noCameraPlaceholder">👤</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="control-group">
+      <label>
+        <input type="checkbox" id="cameraToggle" checked>
+        Camera bubble
+      </label>
+    </div>
+    <div class="control-group">
+      <label>
+        <input type="checkbox" id="micToggle" checked>
+        Microphone
+      </label>
+    </div>
+    <div class="size-control">
+      <label for="sizeSlider">Size</label>
+      <input type="range" id="sizeSlider" min="60" max="160" value="100">
+      <span id="sizeValue">100</span>
+    </div>
+    <div class="coords" id="coordsDisplay">x: 0.85 · y: 0.80</div>
+    <div style="flex: 1"></div>
+    <button class="btn-record" id="recordBtn">Start Recording</button>
+  </div>
+
+  <div class="output-section">
+    <div class="label">Config passed to native helper</div>
+    <pre id="outputPre"></pre>
+    <button class="copy-btn" id="copyBtn">Copy</button>
+  </div>
+</div>
+
+<script>
+const state = {
+  cameraEnabled: true,
+  micEnabled: true,
+  cameraX: 0.85,
+  cameraY: 0.80,
+  cameraSize: 100,
+};
+
+const screenPreview = document.getElementById('screenPreview');
+const faceBubble = document.getElementById('faceBubble');
+const cameraVideo = document.getElementById('cameraVideo');
+const noCameraPlaceholder = document.getElementById('noCameraPlaceholder');
+const cameraToggle = document.getElementById('cameraToggle');
+const micToggle = document.getElementById('micToggle');
+const sizeSlider = document.getElementById('sizeSlider');
+const sizeValue = document.getElementById('sizeValue');
+const coordsDisplay = document.getElementById('coordsDisplay');
+const outputPre = document.getElementById('outputPre');
+const copyBtn = document.getElementById('copyBtn');
+const recordBtn = document.getElementById('recordBtn');
+
+// Camera setup
+async function initCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 320, height: 320 } });
+    cameraVideo.srcObject = stream;
+    cameraVideo.style.display = 'block';
+    noCameraPlaceholder.style.display = 'none';
+  } catch (e) {
+    cameraVideo.style.display = 'none';
+    noCameraPlaceholder.style.display = 'flex';
+  }
+}
+initCamera();
+
+// Position the bubble
+function positionBubble() {
+  const rect = screenPreview.getBoundingClientRect();
+  const size = state.cameraSize;
+  const x = state.cameraX * rect.width - size / 2;
+  const y = state.cameraY * rect.height - size / 2;
+  faceBubble.style.left = `${x}px`;
+  faceBubble.style.top = `${y}px`;
+  faceBubble.style.width = `${size}px`;
+  faceBubble.style.height = `${size}px`;
+}
+
+// Drag logic
+let dragging = false;
+let dragOffset = { x: 0, y: 0 };
+
+faceBubble.addEventListener('mousedown', (e) => {
+  if (!state.cameraEnabled) return;
+  dragging = true;
+  const rect = faceBubble.getBoundingClientRect();
+  dragOffset.x = e.clientX - rect.left - state.cameraSize / 2;
+  dragOffset.y = e.clientY - rect.top - state.cameraSize / 2;
+  e.preventDefault();
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!dragging) return;
+  const rect = screenPreview.getBoundingClientRect();
+  const size = state.cameraSize;
+  let nx = (e.clientX - rect.left - dragOffset.x) / rect.width;
+  let ny = (e.clientY - rect.top - dragOffset.y) / rect.height;
+  // Clamp so bubble stays within bounds
+  const halfNorm = (size / 2) / rect.width;
+  const halfNormY = (size / 2) / rect.height;
+  nx = Math.max(halfNorm, Math.min(1 - halfNorm, nx));
+  ny = Math.max(halfNormY, Math.min(1 - halfNormY, ny));
+  state.cameraX = Math.round(nx * 100) / 100;
+  state.cameraY = Math.round(ny * 100) / 100;
+  updateAll();
+});
+
+document.addEventListener('mouseup', () => { dragging = false; });
+
+// Controls
+cameraToggle.addEventListener('change', () => {
+  state.cameraEnabled = cameraToggle.checked;
+  updateAll();
+});
+micToggle.addEventListener('change', () => {
+  state.micEnabled = micToggle.checked;
+  updateAll();
+});
+sizeSlider.addEventListener('input', () => {
+  state.cameraSize = parseInt(sizeSlider.value);
+  updateAll();
+});
+recordBtn.addEventListener('click', () => {
+  alert(`Recording would start with:\n\ncamera: ${state.cameraEnabled}\nposition: (${state.cameraX}, ${state.cameraY})\nsize: ${state.cameraSize}px\nmic: ${state.micEnabled}`);
+});
+
+// Update
+function updateAll() {
+  positionBubble();
+  faceBubble.classList.toggle('disabled', !state.cameraEnabled);
+  sizeValue.textContent = state.cameraSize;
+  coordsDisplay.textContent = `x: ${state.cameraX.toFixed(2)} · y: ${state.cameraY.toFixed(2)}`;
+
+  const scaledSize = Math.round(state.cameraSize * 3); // 100px mockup = 300px real
+  const parts = [`--fps 15`, `--display 0`];
+  if (state.micEnabled) parts.push('--mic');
+  if (state.cameraEnabled) {
+    parts.push(`--camera`);
+    parts.push(`--camera-x ${state.cameraX.toFixed(2)}`);
+    parts.push(`--camera-y ${state.cameraY.toFixed(2)}`);
+    parts.push(`--camera-size ${scaledSize}`);
+  }
+  outputPre.textContent = `giffrey-sck-capture --output capture.mp4 ${parts.join(' ')}`;
+}
+
+copyBtn.addEventListener('click', () => {
+  navigator.clipboard.writeText(outputPre.textContent);
+  copyBtn.textContent = 'Copied!';
+  setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+});
+
+// Init
+updateAll();
+</script>
+</body>
+</html>

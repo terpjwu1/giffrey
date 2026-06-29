@@ -30,6 +30,10 @@ function assertState<T extends State["name"], E extends T>(actual: T, expected: 
 class Main implements App {
   readonly frameLength = Math.floor(1000 / FPS);
   micEnabled = false;
+  cameraEnabled = false;
+  cameraX = 0.85;
+  cameraY = 0.80;
+  cameraSize = 300;
 
   private _state: State = { name: "start" };
 
@@ -127,6 +131,13 @@ class Main implements App {
           frameRate: { ideal: 30 },
         } as any,
       });
+      console.log('[giffrey] getDisplayMedia returned stream:', {
+        videoTracks: captureStream.getVideoTracks().map(track => ({
+          label: track.label,
+          readyState: track.readyState,
+          settings: track.getSettings(),
+        })),
+      });
 
       this.state = { name: "recording", captureStream, micStream };
       m.redraw.sync();
@@ -135,6 +146,7 @@ class Main implements App {
         micStream.getTracks().forEach(t => t.stop());
       }
       console.error(err);
+      window.alert("Screen capture permission may be missing — please restart the app after granting permission in System Settings.");
       return;
     }
   }
