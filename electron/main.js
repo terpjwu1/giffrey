@@ -352,7 +352,7 @@ ipcMain.handle('recording-temp:finalize', async (_event, { tempFilePath }) => {
   return { ok: true, tempFilePath };
 });
 
-async function runMp4Export(event, { inputPath, tempDir, trim, crop, source, suggestedFilename }) {
+async function runMp4Export(event, { inputPath, tempDir, trim, crop, source, suggestedFilename, webcamOverlay }) {
   if (activeExportJob) {
     if (tempDir) {
       try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
@@ -389,6 +389,7 @@ async function runMp4Export(event, { inputPath, tempDir, trim, crop, source, sug
     hasAudio: source.hasAudio,
     durationMs: source.durationMs,
     ffmpegPath,
+    webcamOverlay,
     onProgress: (ratio) => {
       if (event.sender && !event.sender.isDestroyed()) {
         event.sender.send('mp4-export:progress', { phase: 'transcoding', ratio });
@@ -441,12 +442,12 @@ ipcMain.handle('mp4-export:chunk', async (_event, { sessionId, chunk }) => {
 });
 
 ipcMain.handle('mp4-export:finalize', async (event, request) => {
-  const { sessionId, inputPath, trim, crop, source, suggestedFilename } = request;
+  const { sessionId, inputPath, trim, crop, source, suggestedFilename, webcamOverlay } = request;
   if (inputPath) {
     if (!isRecordingTempFilePath(inputPath) || !fs.existsSync(inputPath)) {
       return { ok: false, error: { code: 'write_failed', message: 'Recording temp file is not available', recoverable: true } };
     }
-    return runMp4Export(event, { inputPath, tempDir: null, trim, crop, source, suggestedFilename });
+    return runMp4Export(event, { inputPath, tempDir: null, trim, crop, source, suggestedFilename, webcamOverlay });
   }
 
   const session = activeExportSessions.get(sessionId);
@@ -488,6 +489,17 @@ ipcMain.handle('mp4-export:start', async (event, request) => {
   }
 
   return runMp4Export(event, { inputPath, tempDir, trim, crop, source, suggestedFilename });
+});
+
+ipcMain.handle('webcam-overlay:write', async (_event, buffer) => {
+  try {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'giffrey-webcam-'));
+    const webcamPath = path.join(tempDir, 'webcam.webm');
+    fs.writeFileSync(webcamPath, Buffer.from(buffer));
+    return { ok: true, path: webcamPath };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
 });
 
 ipcMain.handle('mp4-export:cancel', async () => {

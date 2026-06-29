@@ -35,6 +35,9 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
   private nativeCaptureOutputPath: string | null = null;
   private micRecorder: MediaRecorder | null = null;
   private micChunks: Blob[] = [];
+  private webcamRecorder: MediaRecorder | null = null;
+  private webcamChunks: Blob[] = [];
+  private webcamStream: MediaStream | null = null;
   private videoMetadataLoaded = false;
   private captureReadyStartedAt = 0;
   private captureError: string | null = null;
@@ -106,6 +109,22 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
           this.height = result.height;
         }
       }).catch(() => {});
+    }
+
+    // Record webcam separately for FFmpeg overlay fallback (when native capture unavailable)
+    if (this.app.cameraEnabled && !this.useNativeCapture) {
+      try {
+        this.webcamStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 480 } },
+        });
+        this.webcamRecorder = new MediaRecorder(this.webcamStream, { mimeType: "video/webm;codecs=vp8" });
+        this.webcamRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) this.webcamChunks.push(e.data);
+        };
+        this.webcamRecorder.start();
+      } catch {
+        this.webcamStream = null;
+      }
     }
 
     const worker = new Worker("/workers/ticker.js");
@@ -267,12 +286,29 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
       tempFilePath = this.videoRecorder?.getTempFilePath() ?? undefined;
     }
 
+    // Stop webcam recording
+    let webcamBlob: Blob | null = null;
+    if (this.webcamRecorder && this.webcamRecorder.state !== "inactive") {
+      await new Promise<void>((resolve) => {
+        this.webcamRecorder!.onstop = () => resolve();
+        this.webcamRecorder!.stop();
+      });
+      if (this.webcamChunks.length > 0) {
+        webcamBlob = new Blob(this.webcamChunks, { type: "video/webm" });
+      }
+    }
+    if (this.webcamStream) {
+      this.webcamStream.getTracks().forEach(t => t.stop());
+      this.webcamStream = null;
+    }
+
     const durationMs = this.frames.length > 0
       ? this.frames[this.frames.length - 1].timestamp
       : 0;
     console.log('[giffrey] stopRecording:', {
       native: this.useNativeCapture,
       videoBlob: videoBlob?.size,
+      webcamBlob: webcamBlob?.size,
       frames: this.frames.length,
       hasAudio: this.hasAudio,
       durationMs,
@@ -287,6 +323,12 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
       hasAudio: this.hasAudio,
       durationMs,
       isNativeCapture: this.useNativeCapture,
+      webcamOverlay: webcamBlob ? {
+        blob: webcamBlob,
+        x: this.app.cameraX ?? 0.85,
+        y: this.app.cameraY ?? 0.80,
+        size: this.app.cameraSize ?? 300,
+      } : undefined,
     });
   }
 }

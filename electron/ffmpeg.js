@@ -46,7 +46,7 @@ function roundEven(n) {
 }
 
 function buildFFmpegArgs(options) {
-  const { inputPath, outputPath, trim, crop, hasAudio } = options;
+  const { inputPath, outputPath, trim, crop, hasAudio, webcamOverlay } = options;
 
   const cropW = roundEven(crop.width);
   const cropH = roundEven(crop.height);
@@ -71,15 +71,36 @@ function buildFFmpegArgs(options) {
   const isFullCrop = cropX === 0 && cropY === 0;
   const needsCrop = !isFullCrop;
 
-  // Q2: This app writes native ScreenCaptureKit recordings as .mp4 and MediaRecorder captures as .webm, so the extension is the dispatch signal here.
-  // Q3: Remuxing an already-finalized MP4 with -c copy is valid; +faststart just relocates the moov atom for playback startup without re-encoding.
-  if (isNativeCapture && !needsTrim && !needsCrop) {
+  // No modifications and no webcam: codec copy (instant remux)
+  if (isNativeCapture && !needsTrim && !needsCrop && !webcamOverlay) {
     args.push('-c', 'copy', '-movflags', '+faststart', outputPath);
     return args;
   }
 
-  if (!isFullCrop) {
-    args.push('-vf', `crop=${cropW}:${cropH}:${cropX}:${cropY}`);
+  // Add webcam overlay as second input
+  if (webcamOverlay) {
+    args.push('-i', webcamOverlay.path);
+    // Circular mask overlay using filter_complex
+    const size = webcamOverlay.size || 300;
+    const x = Math.round(webcamOverlay.x * crop.width - size / 2);
+    const y = Math.round(webcamOverlay.y * crop.height - size / 2);
+    const filterParts = [];
+    // Scale and mask the webcam (input 1)
+    filterParts.push(`[1:v]scale=${size}:${size},format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),(W/2)*(W/2)),255,0)'[cam]`);
+    // Apply crop to main video if needed, then overlay
+    if (!isFullCrop) {
+      filterParts.push(`[0:v]crop=${cropW}:${cropH}:${cropX}:${cropY}[main]`);
+      filterParts.push(`[main][cam]overlay=${x}:${y}:format=auto[out]`);
+    } else {
+      filterParts.push(`[0:v][cam]overlay=${x}:${y}:format=auto[out]`);
+    }
+    args.push('-filter_complex', filterParts.join(';'));
+    args.push('-map', '[out]');
+    if (hasAudio) args.push('-map', '0:a');
+  } else {
+    if (!isFullCrop) {
+      args.push('-vf', `crop=${cropW}:${cropH}:${cropX}:${cropY}`);
+    }
   }
 
   args.push(
@@ -90,7 +111,7 @@ function buildFFmpegArgs(options) {
   );
 
   if (hasAudio) {
-    if (isNativeCapture && !needsTrim) {
+    if (isNativeCapture && !needsTrim && !webcamOverlay) {
       args.push('-c:a', 'copy');
     } else {
       args.push('-c:a', 'aac', '-b:a', '128k');

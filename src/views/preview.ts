@@ -582,6 +582,17 @@ export default class PreviewView implements m.ClassComponent<PreviewViewAttrs> {
       this.mp4ExportPhase = "Choose save location...";
       m.redraw();
 
+      // Write webcam overlay blob to temp file if present
+      let webcamOverlayPath: string | undefined;
+      if (this.recording.webcamOverlay) {
+        const overlay = this.recording.webcamOverlay;
+        const webcamBuffer = await overlay.blob.arrayBuffer();
+        const writeResult = await giffrey.writeWebcamOverlay(webcamBuffer);
+        if (writeResult.ok) {
+          webcamOverlayPath = writeResult.path;
+        }
+      }
+
       const exportResult = await giffrey.finalizeMp4Export({
         inputPath: tempFilePath,
         trim: { startMs: trimStartMs, endMs: trimEndMs },
@@ -593,6 +604,12 @@ export default class PreviewView implements m.ClassComponent<PreviewViewAttrs> {
           hasAudio: this.recording.hasAudio,
         },
         suggestedFilename: filename,
+        webcamOverlay: webcamOverlayPath ? {
+          path: webcamOverlayPath,
+          x: this.recording.webcamOverlay!.x,
+          y: this.recording.webcamOverlay!.y,
+          size: this.recording.webcamOverlay!.size,
+        } : undefined,
       });
       if (!exportResult.ok) {
         if (exportResult.error?.code !== 'cancelled') {

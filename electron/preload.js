@@ -89,4 +89,7 @@ contextBridge.exposeInMainWorld('giffrey', {
   stopNativeCapture: async () => {
     return ipcRenderer.invoke('sck-capture:stop');
   },
+  writeWebcamOverlay: async (buffer) => {
+    return ipcRenderer.invoke('webcam-overlay:write', buffer);
+  },
 });

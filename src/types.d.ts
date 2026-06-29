@@ -12,6 +12,12 @@ export interface Recording {
   readonly hasAudio: boolean;
   readonly durationMs: number;
   readonly isNativeCapture?: boolean;
+  readonly webcamOverlay?: {
+    readonly blob: Blob;
+    readonly x: number;
+    readonly y: number;
+    readonly size: number;
+  };
 }
 
 export interface Rect {

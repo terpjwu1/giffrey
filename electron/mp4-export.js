@@ -16,7 +16,7 @@ function parseProgress(line, durationMs) {
 }
 
 function createExportJob(options) {
-  const { inputPath, outputPath, trim, crop, hasAudio, durationMs, ffmpegPath, onProgress } = options;
+  const { inputPath, outputPath, trim, crop, hasAudio, durationMs, ffmpegPath, onProgress, webcamOverlay } = options;
 
   let status = 'pending';
   let childProcess = null;
@@ -29,7 +29,7 @@ function createExportJob(options) {
 
     run() {
       status = 'running';
-      const args = buildFFmpegArgs({ inputPath, outputPath, trim, crop, hasAudio });
+      const args = buildFFmpegArgs({ inputPath, outputPath, trim, crop, hasAudio, webcamOverlay });
 
       return new Promise((resolve) => {
         try {
