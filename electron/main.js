@@ -369,6 +369,9 @@ async function runMp4Export(event, { inputPath, tempDir, trim, crop, source, sug
     if (tempDir) {
       try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
     }
+    if (webcamOverlay?.path) {
+      try { fs.rmSync(path.dirname(webcamOverlay.path), { recursive: true, force: true }); } catch {}
+    }
     return { ok: false, error: { code: 'cancelled', message: 'Save cancelled', recoverable: true } };
   }
 
@@ -377,6 +380,9 @@ async function runMp4Export(event, { inputPath, tempDir, trim, crop, source, sug
   if (!validation.valid) {
     if (tempDir) {
       try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+    }
+    if (webcamOverlay?.path) {
+      try { fs.rmSync(path.dirname(webcamOverlay.path), { recursive: true, force: true }); } catch {}
     }
     return { ok: false, error: validation.error };
   }
