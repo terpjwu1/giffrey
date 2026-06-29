@@ -13,8 +13,9 @@ interface RecordViewAttrs {
   readonly micStream: MediaStream | null;
 }
 
-const MAX_GIF_FRAMES = 600;
+const MAX_GIF_FRAMES = 900;
 const GIF_SCALE = 0.25;
+const PREVIEW_FPS = 1;
 const CAPTURE_READY_TIMEOUT_MS = 2000;
 const CAPTURE_PERMISSION_ERROR = "Screen capture permission may be missing — please restart the app after granting permission in System Settings.";
 
@@ -158,18 +159,11 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
           canvas.width = gifWidth;
           canvas.height = gifHeight;
         } else {
-          // Fallback: canvas upscaling path
-          const track = this.captureStream.getVideoTracks()[0];
-          const settings = track?.getSettings();
-          const sourceWidth = settings?.width || video.videoWidth;
-          const sourceHeight = settings?.height || video.videoHeight;
-          const dimensions = calculateCaptureDimensions(sourceWidth, sourceHeight, this.displayCaptureInfo);
-
-          this.width = dimensions.outputWidth;
-          this.height = dimensions.outputHeight;
-          canvas.width = dimensions.outputWidth;
-          canvas.height = dimensions.outputHeight;
-          ctx.imageSmoothingEnabled = !dimensions.upscaled;
+          // Fallback: use logical resolution (no upscaling — prevents OOM)
+          this.width = video.videoWidth;
+          this.height = video.videoHeight;
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
         }
       }
 
@@ -195,12 +189,23 @@ export default class RecordView implements m.ClassComponent<RecordViewAttrs> {
         this.videoRecorder.start();
       }
 
-      ctx.drawImage(video, 0, 0, this.width, this.height);
-      const imageData = ctx.getImageData(0, 0, this.width, this.height);
+      // Capture preview frames at 1 FPS, 1/4 resolution (covers 15 min at ~435 MB)
+      const previewW = Math.round(this.width * GIF_SCALE);
+      const previewH = Math.round(this.height * GIF_SCALE);
+      if (canvas.width !== previewW) {
+        canvas.width = previewW;
+        canvas.height = previewH;
+      }
+      if (this.frames.length >= MAX_GIF_FRAMES) return;
+      const elapsed = Date.now() - this.startTime;
+      const expectedFrames = Math.floor(elapsed / 1000 * PREVIEW_FPS);
+      if (this.frames.length >= expectedFrames) return;
+      ctx.drawImage(video, 0, 0, previewW, previewH);
+      const imageData = ctx.getImageData(0, 0, previewW, previewH);
 
       this.frames.push({
         imageData,
-        timestamp: first ? 0 : Date.now() - this.startTime,
+        timestamp: first ? 0 : elapsed,
       });
     };
 
