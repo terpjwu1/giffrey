@@ -80,10 +80,12 @@ function buildFFmpegArgs(options) {
   // Add webcam overlay as second input
   if (webcamOverlay) {
     args.push('-i', webcamOverlay.path);
-    // Circular mask overlay using filter_complex
+    // Position relative to the output frame (after crop if any)
     const size = webcamOverlay.size || 300;
-    const x = Math.round(webcamOverlay.x * crop.width - size / 2);
-    const y = Math.round(webcamOverlay.y * crop.height - size / 2);
+    const outputW = needsCrop ? cropW : (webcamOverlay.sourceWidth || cropW);
+    const outputH = needsCrop ? cropH : (webcamOverlay.sourceHeight || cropH);
+    const x = Math.round(webcamOverlay.x * outputW - size / 2);
+    const y = Math.round(webcamOverlay.y * outputH - size / 2);
     const filterParts = [];
     // Scale and mask the webcam (input 1)
     filterParts.push(`[1:v]scale=${size}:${size},format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2),(W/2)*(W/2)),255,0)'[cam]`);

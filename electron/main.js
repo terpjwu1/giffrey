@@ -406,6 +406,9 @@ async function runMp4Export(event, { inputPath, tempDir, trim, crop, source, sug
     if (tempDir) {
       try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
     }
+    if (webcamOverlay?.path) {
+      try { fs.rmSync(path.dirname(webcamOverlay.path), { recursive: true, force: true }); } catch {}
+    }
     activeExportJob = null;
   }
 }

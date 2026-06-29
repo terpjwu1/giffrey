@@ -590,6 +590,8 @@ export default class PreviewView implements m.ClassComponent<PreviewViewAttrs> {
         const writeResult = await giffrey.writeWebcamOverlay(webcamBuffer);
         if (writeResult.ok) {
           webcamOverlayPath = writeResult.path;
+        } else {
+          throw new Error("Failed to write webcam overlay: " + (writeResult.error || "unknown error"));
         }
       }
 
@@ -609,6 +611,8 @@ export default class PreviewView implements m.ClassComponent<PreviewViewAttrs> {
           x: this.recording.webcamOverlay!.x,
           y: this.recording.webcamOverlay!.y,
           size: this.recording.webcamOverlay!.size,
+          sourceWidth: this.recording.width,
+          sourceHeight: this.recording.height,
         } : undefined,
       });
       if (!exportResult.ok) {
