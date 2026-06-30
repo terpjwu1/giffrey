@@ -8,12 +8,13 @@ Built with Electron, powered by Apple's ScreenCaptureKit for native pixel-perfec
 
 ## Features
 
+- **Speaker face bubble** — circular webcam overlay (PiP), position it before recording, composited on export
 - **Native Retina capture** — records at physical pixel resolution (3456x2234 on MacBook Pro) via ScreenCaptureKit
 - **Hardware H.264 encoding** — VideoToolbox accelerated, minimal CPU usage during recording
 - **Microphone recording** — captures voice commentary alongside screen
 - **GIF export** — trim and crop, then encode via WebAssembly
 - **MP4 export** — near-lossless quality (CRF 18), instant remux when no edits applied
-- **Up to 10 minutes** — chunked IPC write prevents corruption on long recordings
+- **Up to 15 minutes** — preview frames capped at 1 FPS/¼ res, recording writes to disk
 
 ## Quick Start
 
